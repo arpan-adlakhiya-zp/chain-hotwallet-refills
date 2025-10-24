@@ -32,50 +32,39 @@ class RefillService {
 
   async initializeProviders() {
     try {
-      // Get all blockchain configurations to find which providers are needed
-      const supportedBlockchains = tokenProviderConfig.getSupportedBlockchains();
-      const activeProviders = new Set();
+      logger.info('Initializing providers...');
       
-      // Collect all unique providers that are actually used
-      for (const blockchainName of supportedBlockchains) {
-        const providerName = tokenProviderConfig.getActiveProvider(blockchainName);
-        if (providerName) {
-          activeProviders.add(providerName);
+      // Initialize Liminal provider
+      if (!this.providers.has('liminal')) {
+        const liminalSecret = config.getSecret('liminal') || {};
+        if (liminalSecret.clientId && liminalSecret.clientSecret && liminalSecret.AuthAudience) {
+          const liminalEnv = this.getLiminalEnvironmentFromConfig();
+          const liminalConfig = { env: liminalEnv };
+          const liminalProvider = new LiminalProvider(liminalConfig, liminalSecret);
+          await liminalProvider.init();
+          this.providers.set('liminal', liminalProvider);
+          logger.info(`Liminal provider initialized with environment: ${liminalEnv}`);
+        } else {
+          logger.error('Liminal credentials not found or incomplete');
         }
       }
 
-      // Initialize each provider only once
-      for (const providerName of activeProviders) {
-        if (providerName === 'liminal' && !this.providers.has('liminal')) {
-          const liminalSecret = config.getSecret('liminal') || {};
-          if (liminalSecret.clientId && liminalSecret.clientSecret && liminalSecret.AuthAudience) {
-            // Extract environment from any blockchain config that uses Liminal
-            const liminalEnv = this.getLiminalEnvironmentFromConfig();
-            const liminalConfig = { env: liminalEnv };
-            const liminalProvider = new LiminalProvider(liminalConfig, liminalSecret);
-            await liminalProvider.init();
-            this.providers.set('liminal', liminalProvider);
-            logger.info(`Liminal provider initialized with environment: ${liminalEnv}`);
-          } else {
-            logger.warn('Liminal credentials not found or incomplete');
-          }
-        }
-
-        if (providerName === 'fireblocks' && !this.providers.has('fireblocks')) {
-          const fireblocksSecret = config.getSecret('fireblocks') || {};
-          if (fireblocksSecret.apiKey && fireblocksSecret.privateKey) {
-            // Extract API base URL from any blockchain config that uses Fireblocks
-            const fireblocksApiUrl = this.getFireblocksApiUrlFromConfig();
-            const fireblocksConfig = { apiBaseUrl: fireblocksApiUrl };
-            const fireblocksProvider = new FireblocksProvider(fireblocksConfig, fireblocksSecret);
-            await fireblocksProvider.init();
-            this.providers.set('fireblocks', fireblocksProvider);
-            logger.info(`Fireblocks provider initialized with API URL: ${fireblocksApiUrl}`);
-          } else {
-            logger.warn('Fireblocks credentials not found or incomplete');
-          }
+      // Initialize Fireblocks provider
+      if (!this.providers.has('fireblocks')) {
+        const fireblocksSecret = config.getSecret('fireblocks') || {};
+        if (fireblocksSecret.apiKey && fireblocksSecret.privateKey) {
+          const fireblocksApiUrl = this.getFireblocksApiUrlFromConfig();
+          const fireblocksConfig = { apiBaseUrl: fireblocksApiUrl };
+          const fireblocksProvider = new FireblocksProvider(fireblocksConfig, fireblocksSecret);
+          await fireblocksProvider.init();
+          this.providers.set('fireblocks', fireblocksProvider);
+          logger.info(`Fireblocks provider initialized with API URL: ${fireblocksApiUrl}`);
+        } else {
+          logger.error('Fireblocks credentials not found or incomplete');
         }
       }
+
+      logger.info('Provider initialization completed');
     } catch (error) {
       logger.error(`Failed to initialize providers: ${error.message}`);
       throw error;
@@ -113,7 +102,7 @@ class RefillService {
       refillData.provider = provider; // Pass provider to validation
       const validationResult = await refillValidationService.validateRefillRequest(refillData);
       if (!validationResult.isValid) {
-        logger.warn(`Refill request validation failed: ${validationResult.error}`);
+        logger.error(`Refill request validation failed: ${validationResult.error}`);
         return {
           success: false,
           error: validationResult.error,
@@ -127,19 +116,8 @@ class RefillService {
 
       logger.info(`Selected provider: ${provider.constructor.getProviderName()}`);
 
-      // Step 3: Create refill request record in database
-      const refillRequestData = {
-        walletId: validatedData.wallet.id,
-        assetId: validatedData.asset.id,
-        requestAmountAtomic: validatedData.refillAmountAtomic,
-        requestAmountUsdEquivalent: null,
-        requestStatus: 'pending',
-        provider: provider.constructor.getProviderName(),
-        createdBy: 'refill-service'
-      };
-
-      // Step 4: Initiate transaction with selected provider
-      const transactionResult = await this.initiateRefill(validatedData, refillRequest.id, provider);
+      // Step 3: Initiate transaction with selected provider
+      const transactionResult = await this.initiateRefill(validatedData, provider);
 
       if (!transactionResult.success) {
         return {
@@ -179,110 +157,182 @@ class RefillService {
 
   async initiateRefill(validatedData, provider) {
     try {
-      logger.info(`Initiating refill transaction with provider: ${provider.constructor.getProviderName()}`);
+      logger.info(`Initiating refill transfer request with provider: ${provider.constructor.getProviderName()}`);
 
-      // Prepare transaction data for the provider (following infra pattern)
-      const txns = [{
-        sendAddress: validatedData.wallet.address,
-        amount: validatedData.refillAmountAtomic,
-      }];
+      // For Liminal, create a transfer request (triggers multi-sig approval process)
+      if (provider.constructor.getProviderName() === 'liminal') {
+        const transferData = {
+          coldWalletId: validatedData.asset.sweepWalletConfig.liminal.walletId,
+          hotWalletAddress: validatedData.wallet.address,
+          amount: validatedData.refillAmountAtomic,
+          asset: validatedData.asset.symbol,
+          blockchain: validatedData.blockchain.symbol,
+          contractAddress: validatedData.asset.contractAddress
+        };
 
-      // Get token provider configuration using blockchain symbol from DB
-      const tokenConfig = tokenProviderConfig.getTokenProviderConfig(
-        validatedData.blockchain.symbol,
-        validatedData.asset.symbol
-      );
+        const transferRequest = await provider.createTransferRequest(transferData);
 
-      if (!tokenConfig) {
-        throw new Error(`No provider configuration found for ${validatedData.asset.symbol} on blockchain ${refillData.chain_name}`);
+        logger.info(`Transfer request created successfully with ${provider.constructor.getProviderName()}`);
+
+        return {
+          success: true,
+          transferId: transferRequest.id || transferRequest.transferId,
+          status: 'pending_approval',
+          message: 'Refill transfer request created - awaiting multi-sig approval',
+          transferRequest: transferRequest
+        };
+      } else if (provider.constructor.getProviderName() === 'fireblocks') {
+        // For Fireblocks, create a cold to hot wallet refill transfer
+        const transferData = {
+          coldWalletVaultId: validatedData.asset.sweepWalletConfig.fireblocks.vaultId,
+          hotWalletAddress: validatedData.wallet.address,
+          amount: validatedData.refillAmountAtomic,
+          asset: validatedData.asset.symbol,
+          blockchain: validatedData.blockchain.symbol,
+          contractAddress: validatedData.asset.contractAddress
+        };
+
+        const transferRequest = await provider.createColdToHotRefill(transferData);
+
+        logger.info(`Cold to hot wallet refill created successfully with ${provider.constructor.getProviderName()}`);
+
+        return {
+          success: true,
+          transactionId: transferRequest.transactionId,
+          status: 'submitted',
+          message: 'Cold to hot wallet refill transaction submitted to Fireblocks',
+          transferRequest: transferRequest
+        };
+      } else {
+        // For other providers (like Fireblocks), use the original transaction flow
+        const txns = [{
+          sendAddress: validatedData.wallet.address,
+          amount: validatedData.refillAmountAtomic,
+        }];
+
+        const token = {
+          symbol: validatedData.asset.symbol,
+          blockchainId: validatedData.blockchain.id,
+          blockchainSymbol: validatedData.blockchain.symbol,
+          decimalPlaces: validatedData.asset.decimals,
+          contractAddress: validatedData.asset.contractAddress,
+          walletConfig: {
+            liminal: {
+              walletId: validatedData.wallet.hotWalletConfig.liminal.walletId
+            },
+            fireblocks: {}
+          },
+          sweepWalletConfig: validatedData.asset.sweepWalletConfig
+        };
+
+        const providerResult = await provider.createSignAndSubmit(txns, token);
+
+        logger.info(`Transaction completed successfully with ${provider.constructor.getProviderName()}`);
+
+        return {
+          success: true,
+          transactionHash: providerResult.submitResult?.txHash || providerResult.submitResult?.hash || null,
+          providerTransactionId: providerResult.transactionId || providerResult.batchId || null,
+          batchId: providerResult.batchId,
+          createResult: providerResult.createResult,
+          signResult: providerResult.signResult,
+          submitResult: providerResult.submitResult
+        };
       }
 
-      // Prepare token object for the provider
-      const token = {
-        symbol: validatedData.asset.symbol,
-        blockchainId: validatedData.blockchain.id,
-        decimalPlaces: validatedData.asset.decimals,
-        contractAddress: validatedData.asset.contract_address,
-        nativeCoin: validatedData.blockchain.native_asset_symbol,
-        hotWalletConfig: {
-          liminalHotWalletId: tokenConfig.walletId || validatedData.wallet.wallet_id,
-          fireblocksConfig: {
-            vaultId: tokenConfig.vaultId || 'default_vault',
-            assetId: validatedData.asset.symbol
-          }
-        }
-      };
-
-      // Initiate transaction with the selected provider
-      const providerResult = await provider.createTransaction(txns, token);
-
-      logger.info(`Transaction initiated successfully with ${provider.constructor.getProviderName()}`);
-
-      return {
-        success: true,
-        transactionHash: providerResult.rawTx?.txHash || providerResult.rawTx?.hash || null,
-        providerTransactionId: providerResult.txId || providerResult.rawTx?.sequenceId || providerResult.rawTx?.id || null
-      };
-
     } catch (error) {
-      logger.error(`Error initiating refill transaction: ${error.message}`);
+      logger.error(`Error initiating refill: ${error.message}`);
       return {
         success: false,
-        error: `Failed to initiate transaction with ${provider.constructor.getProviderName()}`,
-        code: 'TRANSACTION_INITIATION_ERROR',
+        error: `Failed to initiate refill with ${provider.constructor.getProviderName()}`,
+        code: 'REFILL_INITIATION_ERROR',
         details: error.message
       };
     }
   }
 
-  async getRefillStatus(refillRequestId) {
+  async getRefillStatus(refillRequestId, provider, token) {
     try {
-      // This would typically query the database for the current status
-      // and potentially check with the provider for the latest transaction status
       logger.info(`Getting refill status for request ID: ${refillRequestId}`);
 
-      // TODO: Implement status checking logic
-      return {
-        success: true,
-        refillRequestId,
-        status: 'pending',
-        message: 'Status check not yet implemented'
-      };
+      // For Liminal, check transfer status
+      if (provider.constructor.getProviderName() === 'liminal') {
+        const transferStatus = await provider.getTransferStatus(refillRequestId, token);
+        
+        return {
+          success: true,
+          refillRequestId,
+          status: transferStatus.status || 'pending',
+          message: `Transfer status: ${transferStatus.status}`,
+          transferStatus: transferStatus
+        };
+      } else if (provider.constructor.getProviderName() === 'fireblocks') {
+        // For Fireblocks, check transaction status
+        const transactionStatus = await provider.getTransactionStatus(refillRequestId, token);
+        
+        return {
+          success: true,
+          refillRequestId,
+          status: transactionStatus.status || 'pending',
+          message: `Fireblocks transaction status: ${transactionStatus.status}`,
+          transactionStatus: transactionStatus,
+          fireblocksTransactionId: transactionStatus.id,
+          externalTxId: transactionStatus.externalTxId
+        };
+      } else {
+        // For other providers, check transaction status
+        const transactionStatus = await provider.getTransactionStatus(refillRequestId, token);
+        
+        return {
+          success: true,
+          refillRequestId,
+          status: transactionStatus.status || 'pending',
+          message: `Transaction status: ${transactionStatus.status}`,
+          transactionStatus: transactionStatus
+        };
+      }
     } catch (error) {
       logger.error(`Error getting refill status: ${error.message}`);
       return {
         success: false,
         error: 'Failed to get refill status',
-        code: 'STATUS_CHECK_ERROR'
+        code: 'STATUS_CHECK_ERROR',
+        details: error.message
       };
     }
   }
 
   async getTokenProvider(chainName, assetSymbol) {
     try {
-      // Get blockchain details from database to get the symbol
+      // Get blockchain details from database
       const blockchain = await databaseService.getBlockchainByName(chainName);
       if (!blockchain) {
-        logger.warn(`Blockchain not found for chain name: ${chainName}`);
+        logger.error(`Blockchain not found for chain name: ${chainName}`);
         return null;
       }
 
-      // Get the provider for this specific token using the symbol from DB
-      const providerName = tokenProviderConfig.getTokenProvider(blockchain.symbol, assetSymbol);
-      
+      // Get asset details from database to get the provider from sweepWalletConfig
+      const asset = await databaseService.getAssetBySymbolAndBlockchain(assetSymbol.toUpperCase(), blockchain.id);
+      if (!asset) {
+        logger.error(`Asset not found for symbol: ${assetSymbol} on blockchain: ${chainName}`);
+        return null;
+      }
+
+      // Get the provider from the asset's sweepWalletConfig
+      const providerName = asset.sweepWalletConfig?.provider;
       if (!providerName) {
-        logger.warn(`No provider configuration found for blockchain ${chainName} (${blockchain.symbol}), asset ${assetSymbol}`);
+        logger.error(`No provider configured in sweepWalletConfig for asset: ${assetSymbol} on blockchain: ${chainName}`);
         return null;
       }
 
       // Get the provider instance
       const provider = this.providers.get(providerName);
       if (!provider) {
-        logger.error(`Provider ${providerName} not initialized for blockchain ${chainName} (${blockchain.symbol}), asset ${assetSymbol}`);
+        logger.error(`Provider ${providerName} not initialized for blockchain ${chainName}, asset ${assetSymbol}`);
         return null;
       }
 
-      logger.info(`Using provider ${providerName} for blockchain ${chainName} (${blockchain.symbol}), asset ${assetSymbol}`);
+      logger.info(`Using provider ${providerName} for blockchain ${chainName}, asset ${assetSymbol}`);
       return provider;
     } catch (error) {
       logger.error(`Error getting token provider: ${error.message}`);

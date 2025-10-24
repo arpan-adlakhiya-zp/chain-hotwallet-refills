@@ -41,34 +41,6 @@ class AbstractProvider {
     return;
   }
 
-  /**
-   * Get fee token balance for a wallet
-   * @param {Object} token - Token configuration object
-   * @returns {Promise<string>} Balance in atomic units
-   */
-  async getFeeTokenBalance(token) {
-    return;
-  }
-
-  /**
-   * Create a transaction from cold wallet to hot wallet
-   * @param {Array} txns - Array of transaction objects
-   * @param {Object} token - Token configuration object
-   * @returns {Promise<Object>} Transaction object with rawTx and serializedTx
-   */
-  async createTransaction(txns, token) {
-    return;
-  }
-
-  /**
-   * Send/broadcast a transaction
-   * @param {Object} txn - Transaction object
-   * @param {Object} token - Token configuration object
-   * @returns {Promise<Object>} Transaction result with txId
-   */
-  async sendTransaction(txn, token) {
-    return;
-  }
 
   /**
    * Get transaction status
@@ -81,15 +53,16 @@ class AbstractProvider {
   }
 
   /**
-   * Send travel rule request (if supported)
+   * Complete transaction flow: create, sign, and submit
    * @param {Array} txns - Array of transaction objects
    * @param {Object} token - Token configuration object
-   * @param {number} retries - Number of retries
-   * @returns {Promise<Object>} Travel rule result
+   * @param {string} batchId - Optional batch ID
+   * @returns {Promise<Object>} Complete transaction result
    */
-  async sendTravelRuleRequest(txns, token, retries) {
+  async createSignAndSubmit(txns, token, batchId = null) {
     return;
   }
+
 
   /**
    * Validate provider credentials and configuration
@@ -99,13 +72,6 @@ class AbstractProvider {
     throw new Error('validateCredentials() method must be implemented by provider');
   }
 
-  /**
-   * Get provider-specific configuration requirements
-   * @returns {Object} Configuration schema for this provider
-   */
-  static getConfigSchema() {
-    throw new Error('getConfigSchema() method must be implemented by provider');
-  }
 
   /**
    * Get provider name
@@ -115,24 +81,6 @@ class AbstractProvider {
     throw new Error('getProviderName() method must be implemented by provider');
   }
 
-  /**
-   * Check if provider supports a specific blockchain
-   * @param {number} blockchainId - Blockchain chain ID
-   * @returns {boolean} Whether the provider supports this blockchain
-   */
-  supportsBlockchain(blockchainId) {
-    throw new Error('supportsBlockchain() method must be implemented by provider');
-  }
-
-  /**
-   * Check if provider supports a specific asset
-   * @param {string} assetSymbol - Asset symbol
-   * @param {number} blockchainId - Blockchain chain ID
-   * @returns {boolean} Whether the provider supports this asset
-   */
-  supportsAsset(assetSymbol, blockchainId) {
-    throw new Error('supportsAsset() method must be implemented by provider');
-  }
 
   /**
    * Get provider health status

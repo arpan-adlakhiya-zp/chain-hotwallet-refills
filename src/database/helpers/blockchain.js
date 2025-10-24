@@ -6,7 +6,10 @@ function getBlockchainById(id) {
 
 function getBlockchainByName(name) {
   return db.Blockchain.findOne({
-    where: { name: name, isActive: true }
+    where: { 
+      name: { [db.Sequelize.Op.iLike]: name },
+      isActive: true 
+    }
   });
 }
 
@@ -25,7 +28,10 @@ function getAllBlockchains() {
 
 function getBlockchainBySymbol(symbol) {
   return db.Blockchain.findOne({
-    where: { symbol: symbol, isActive: true }
+    where: { 
+      symbol: { [db.Sequelize.Op.iLike]: symbol }, 
+      isActive: true 
+    }
   });
 }
 

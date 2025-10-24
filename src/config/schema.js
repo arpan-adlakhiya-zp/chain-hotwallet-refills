@@ -118,6 +118,24 @@ const schema = {
                     }
                 },
                 required: ['apiKey', 'privateKey']
+            },
+            liminalTsmCredentials: {
+                type: 'object',
+                properties: {
+                    userID: {
+                        type: 'string'
+                    },
+                    url: {
+                        type: 'string'
+                    },
+                    password: {
+                        type: 'string'
+                    },
+                    publicKey: {
+                        type: 'string'
+                    }
+                },
+                required: ['userID', 'url', 'password', 'publicKey']
             }
         },
         required: ['chainDb', 'liminal', 'fireblocks']

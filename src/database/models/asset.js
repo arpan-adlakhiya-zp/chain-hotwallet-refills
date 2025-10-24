@@ -102,6 +102,10 @@ module.exports = (sequelize, DataTypes) => {
       field: 'refill_sweep_wallet',
       type: DataTypes.STRING(255)
     },
+    sweepWalletConfig: {
+      field: 'sweep_wallet_config',
+      type: DataTypes.JSON
+    },
     blockchainId: {
       field: 'blockchain_id',
       type: DataTypes.INTEGER,

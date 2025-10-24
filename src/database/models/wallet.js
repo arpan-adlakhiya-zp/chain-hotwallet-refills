@@ -61,6 +61,10 @@ module.exports = (sequelize, DataTypes) => {
       },
       allowNull: false,
     },
+    hotWalletConfig: {
+      field: 'hot_wallet_config',
+      type: DataTypes.JSON
+    },
     createdAt: {
       field: 'created_at',
       allowNull: false,

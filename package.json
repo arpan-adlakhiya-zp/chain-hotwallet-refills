@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@lmnl/liminaljs": "^1.0.0",
-    "@zebpay/colt": "1.2.0",
+    "@zebpay/colt": "^1.2.0",
     "axios": "^1.7.9",
     "bignumber.js": "^9.1.2",
     "body-parser": "^1.20.2",

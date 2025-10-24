@@ -11,7 +11,10 @@ function getAssetById(id) {
 
 function getAssetBySymbol(symbol) {
   return db.Asset.findOne({
-    where: { symbol: symbol, isActive: true },
+    where: { 
+      symbol: { [db.Sequelize.Op.iLike]: symbol }, 
+      isActive: true 
+    },
     include: [
       { model: db.Blockchain, as: 'Blockchain' },
       { model: db.Wallet, as: 'Wallet' }
@@ -21,7 +24,11 @@ function getAssetBySymbol(symbol) {
 
 function getAssetBySymbolAndBlockchain(symbol, blockchainId) {
   return db.Asset.findOne({
-    where: { symbol: symbol, blockchainId: blockchainId, isActive: true },
+    where: { 
+      symbol: { [db.Sequelize.Op.iLike]: symbol }, 
+      blockchainId: blockchainId, 
+      isActive: true 
+    },
     include: [
       { model: db.Blockchain, as: 'Blockchain' },
       { model: db.Wallet, as: 'Wallet' }

@@ -32,166 +32,213 @@ class WalletFactory {
   async getWallet(token) {
     let wallet = null;
     try {
-      if (token.nativeCoin && token.contractAddress) {
+      // Get wallet ID from the correct location
+      let walletId = null;
+      if (token.walletConfig && token.walletConfig.liminal && token.walletConfig.liminal.walletId) {
+        walletId = token.walletConfig.liminal.walletId;
+      } else if (token.sweepWalletConfig && token.sweepWalletConfig.liminal && token.sweepWalletConfig.liminal.walletId) {
+        walletId = token.sweepWalletConfig.liminal.walletId;
+      } else {
+        throw new Error("No wallet ID found in token configuration");
+      }
+
+      // Check if this is a contract token (has contractAddress) or native token
+      if (token.contractAddress && token.contractAddress !== 'native') {
+        // Contract token - use Token API
         let liminalTokenSymbol = token.symbol.toLowerCase();
 
-        // For AVAX on BSC Liminal expects token symbol as avaxb
-        if (token.nativeCoin.toLowerCase() === 'bnb' && token.symbol.toLowerCase() === 'avax') {
+        // Special cases for specific tokens on specific chains
+        if (token.blockchainSymbol === 'bnb' && token.symbol.toLowerCase() === 'avax') {
           liminalTokenSymbol = 'avaxb';
         }
-        if (token.nativeCoin.toLowerCase() === 'bnb' && token.symbol.toLowerCase() === 'wrx') {
+        if (token.blockchainSymbol === 'bnb' && token.symbol.toLowerCase() === 'wrx') {
           liminalTokenSymbol = 'wrxnew';
         }
 
+        logger.debug(`Getting contract token wallet for: ${liminalTokenSymbol}, walletId: ${walletId}`);
+
         wallet = await this.liminalJs
-          .Coin(CoinsEnum[token.nativeCoin.toLowerCase()])
+          .Coin(CoinsEnum[token.blockchainSymbol.toLowerCase()])
           .Token({
             tokenName: liminalTokenSymbol,
             tokenAddress: token.contractAddress,
           })
           .Wallets()
-          .Get({ walletId: token.hotWalletConfig.liminalHotWalletId, allTokens: true });
+          .Get({ walletId: walletId, allTokens: true });
       } else {
-        let coinSymbol = token.symbol.toLowerCase() === 'atom' ?
-          ((this.env === 'prod' || this.env === 'beta') ? "uatom" : "umlg") :
-          token.symbol.toLowerCase();
+        // Native token - use Coin API
+        let coinSymbol = token.symbol.toLowerCase();
+        
+        // Special case for ATOM
+        if (token.symbol.toLowerCase() === 'atom') {
+          coinSymbol = (this.env === 'prod' || this.env === 'beta') ? "uatom" : "umlg";
+        }
 
-        logger.debug(`Getting wallet for coin: ${CoinsEnum[coinSymbol]}, walletId: ${token.hotWalletConfig.liminalHotWalletId}`);
+        logger.debug(`Getting native token wallet for coin: ${CoinsEnum[coinSymbol]}, walletId: ${walletId}`);
 
         wallet = await this.liminalJs
           .Coin(CoinsEnum[coinSymbol])
           .Wallets()
-          .Get({ walletId: token.hotWalletConfig.liminalHotWalletId });
+          .Get({ walletId: walletId });
       }
     } catch (error) {
-      logger.error("Error getting wallet:", error);
+      logger.error("Error getting wallet:", JSON.stringify(error, null, 2));
       throw error;
     }
     return wallet;
   }
 
   /**
-   * Get token balance for a specific wallet
-   * @param {Object} token - Token configuration object
-   * @returns {Promise<string>} Balance in atomic units
+   * Create a transfer request from cold wallet to hot wallet using SendMany
+   * This uses Liminal SDK's SendMany method which handles the entire flow internally
+   * @param {Object} transferData - Transfer configuration
+   * @returns {Promise<Object>} Transfer request result
    */
-  async getTokenBalance(token) {
+  async createTransferRequest(transferData) {
     try {
-      const wallet = await this.getWallet(token);
-      if (wallet) {
-        const response = await wallet.GetBalance();
-        return response.spendableBalanceInLowerDenom;
-      } else {
-        throw new Error("Unable to get wallet");
-      }
-    } catch (error) {
-      logger.error("Error getting token balance:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Create and send a transaction using Liminal SDK SendMany
-   * @param {Array} txns - Array of transaction objects
-   * @param {Object} token - Token configuration object
-   * @returns {Promise<Object>} Transaction result
-   */
-  async createTransaction(txns, token) {
-    try {
-      const wallet = await this.getWallet(token);
+      const { coldWalletId, hotWalletAddress, amount, asset, blockchain } = transferData;
       
-      // Prepare recipients data for SendMany
-      const recipients = txns.map((txn) => {
-        let recipient = {
-          address: txn.sendAddress,
-          amount: txn.amount
+      logger.debug(`Creating transfer request: ${amount} ${asset} from cold wallet ${coldWalletId} to ${hotWalletAddress}`);
+      
+      const wallet = await this.getWallet({
+        symbol: asset,
+        blockchainSymbol: blockchain,
+        contractAddress: transferData.contractAddress || null,
+        walletConfig: { liminal: { walletId: coldWalletId } }
+      });
+      
+      if (!wallet) {
+        throw new Error("Unable to get cold wallet instance");
+      }
+      
+      // Generate unique sequence ID for the transaction
+      const sequenceId = `refill_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      logger.debug("Creating transfer request using Liminal SDK SendMany method");
+      
+        // Get the wallet address for native tokens
+        const walletAddress = wallet.WalletAddress;
+        logger.debug("Retrieved wallet address:", walletAddress);
+
+      try {
+        // Prepare the SendMany request body as per Liminal API documentation
+        const sendManyData = {
+          wallet: {
+            coin: asset.toLowerCase(),
+            walletId: parseInt(coldWalletId),
+            allToken: false,
+            tokenOptions: transferData.contractAddress && transferData.contractAddress !== 'native' ? {
+              tokenName: asset,
+              tokenAddress: transferData.contractAddress
+            } : {
+              tokenName: asset,
+              tokenAddress: walletAddress
+            }
+          },
+          transactions: {
+            recipientsData: {
+              recipients: [{
+                address: hotWalletAddress,
+                amount: amount
+              }],
+              sequenceId: sequenceId,
+              isInternal: true
+            }
+          }
         };
 
-        return recipient;
-      });
+        logger.debug("Creating SendMany transaction with data:", sendManyData);
 
-      // Prepare sendMany options
-      const sendManyOptions = {
-        recipients: recipients,
-        sequenceId: `refill_${txns[0].dbId}_${Date.now()}`
-      };
-
-      logger.debug({ wallet: wallet });
-      logger.debug({ createTransaction: sendManyOptions });
+        // Use SendMany method directly
+        const sendManyResult = await wallet.SendMany(sendManyData.transactions.recipientsData, {
+          sequenceId: sequenceId
+        });
+        
+        logger.debug("SendMany result:", sendManyResult);
+        
+        if (!sendManyResult.success) {
+          throw new Error(sendManyResult.message || 'SendMany failed');
+        }
+        
+        logger.debug("SendMany transaction created successfully:", sendManyResult);
+        
+        // Return the transfer result
+        return {
+          transactionId: sendManyResult.data?.txID || sendManyResult.data?.id || sequenceId,
+          status: 'pending_approval',
+          message: 'Transfer request created and queued for approval',
+          fromWalletId: coldWalletId,
+          toWalletAddress: hotWalletAddress,
+          amount: amount,
+          asset: asset,
+          blockchain: blockchain,
+          requiresApproval: true,
+          approvalPlatform: 'Liminal Multi-Sig',
+          refillType: 'sendmany_transfer',
+          sequenceId: sequenceId,
+          createdAt: new Date().toISOString(),
+          result: sendManyResult
+        };
+        
+      } catch (sdkError) {
+        logger.error("Error in SendMany transfer process:", sdkError);
+        throw new Error(`Failed to create transfer request: ${sdkError.message}`);
+      }
       
-      // Use Liminal SDK SendMany method
-      const result = await wallet.SendMany(sendManyOptions);
-      
-      // Mock result for testing (remove this when ready for actual transactions)
-      // const result = {
-      //   sequenceId: `refill_${txns[0].dbId}_${Date.now()}`,
-      //   id: `mock_tx_${Date.now()}`,
-      //   status: 'pending',
-      //   recipients: recipients,
-      //   message: 'Mock transaction - wallet.SendMany commented out for testing'
-      // };
-      
-      logger.debug({ createdTransaction: result });
-
-      return { 
-        rawTx: result, 
-        serializedTx: JSON.stringify(result),
-        txId: result.sequenceId || result.id || `tx_${txns[0].dbId}_${Date.now()}`
-      };
     } catch (error) {
-      logger.error("Error creating transaction:", error);
+      logger.error("Error creating transfer request:", error);
       throw error;
     }
   }
 
-  /**
-   * Send a transaction (alias for createTransaction since SendMany handles the full flow)
-   * @param {Object} txn - Transaction object
-   * @param {Object} token - Token configuration object
-   * @returns {Promise<Object>} Transaction result
-   */
-  async sendTransaction(txn, token) {
-    try {
-      // Convert single transaction to array format expected by createTransaction
-      const txns = [{
-        sendAddress: txn.toAddress,
-        amount: txn.amount,
-        dbId: txn.refillRequestId
-      }];
-
-      const result = await this.createTransaction(txns, token);
-      return { txId: result.txId };
-    } catch (error) {
-      logger.error("Error sending transaction:", error);
-      throw error;
-    }
-  }
 
   /**
-   * Get transaction status
-   * @param {string} batchId - Transaction batch ID (sequenceId)
+   * Get transfer status for monitoring multi-sig approval progress
+   * @param {string} transferId - Transfer request ID
    * @param {Object} token - Token configuration object
-   * @returns {Promise<Object>} Transaction status
+   * @returns {Promise<Object>} Transfer status
    */
-  async getTransactionStatus(batchId, token) {
+  async getTransferStatus(transferId, token) {
     try {
       const wallet = await this.getWallet(token);
+      if (!wallet) {
+        throw new Error("Unable to get wallet instance");
+      }
       
-      // Use Liminal SDK to get transaction status
-      // Note: The exact method may vary based on Liminal SDK version
-      // This is a placeholder implementation - you may need to adjust based on actual SDK methods
-      const status = await wallet.GetTransactionStatus(batchId);
+      const status = await wallet.GetTransactionStatus(transferId);
+      logger.debug(`Transfer ${transferId} status:`, status);
+      return status;
       
-      return {
-        status: status.status || 'unknown',
-        sequenceId: batchId,
-        details: status
-      };
     } catch (error) {
-      logger.error("Error getting transaction status:", error);
+      logger.error("Error getting transfer status:", error);
       throw error;
     }
   }
+
+  /**
+   * Get pending transfers for a wallet
+   * @param {Object} token - Token configuration object
+   * @returns {Promise<Array>} List of pending transfers
+   */
+  async getPendingTransfers(token) {
+    try {
+      const wallet = await this.getWallet(token);
+      if (!wallet) {
+        throw new Error("Unable to get wallet instance");
+      }
+      
+      const transfers = await wallet.GetTransactions({ status: 'pending' });
+      logger.debug(`Found ${transfers.length} pending transfers`);
+      return transfers;
+      
+    } catch (error) {
+      logger.error("Error getting pending transfers:", error);
+      throw error;
+    }
+  }
+
+
+
 
   /**
    * Validate credentials by making a simple API call

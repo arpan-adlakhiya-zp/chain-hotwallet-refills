@@ -1,5 +1,6 @@
 const AbstractProvider = require('../abstractProvider');
 const WalletFactory = require('./walletFactory');
+const Transaction = require('./transaction');
 const BigNumber = require('bignumber.js');
 const logger = require('../../middleware/logger')('liminal');
 
@@ -11,40 +12,12 @@ class LiminalProvider extends AbstractProvider {
   constructor(config, secret) {
     super(config, secret);
     this.walletFactory = new WalletFactory(config.env, config.walletId);
-    this.supportedBlockchains = config.supportedBlockchains || [1, 137, 56, 43114]; // Ethereum, Polygon, BSC, Avalanche
-    this.supportedAssets = config.supportedAssets || ['ETH', 'USDC', 'USDT', 'MATIC', 'BNB', 'AVAX'];
   }
 
   static getProviderName() {
     return 'liminal';
   }
 
-  static getConfigSchema() {
-    return {
-      type: 'object',
-      properties: {
-        baseURL: {
-          type: 'string',
-          default: 'https://api.lmnl.app'
-        },
-        timeout: {
-          type: 'number',
-          default: 30000
-        },
-        supportedBlockchains: {
-          type: 'array',
-          items: { type: 'number' },
-          default: [1, 137, 56, 43114]
-        },
-        supportedAssets: {
-          type: 'array',
-          items: { type: 'string' },
-          default: ['ETH', 'USDC', 'USDT', 'MATIC', 'BNB', 'AVAX']
-        }
-      },
-            required: ['clientId', 'clientSecret', 'AuthAudience']
-    };
-  }
 
   async init() {
     try {
@@ -63,78 +36,70 @@ class LiminalProvider extends AbstractProvider {
     }
   }
 
-  supportsBlockchain(blockchainId) {
-    return this.supportedBlockchains.includes(blockchainId);
-  }
 
-  supportsAsset(assetSymbol, blockchainId) {
-    return this.supportedAssets.includes(assetSymbol.toUpperCase()) &&
-      this.supportsBlockchain(blockchainId);
-  }
+  // Note: For Liminal multi-sig wallets, we don't use createSignAndSubmit
+  // Instead, we create transfer requests that trigger manual approval
+  // The createSignAndSubmit method is removed as it's not needed for multi-sig workflow
 
-  async createTransaction(txns, token) {
+  // Note: For Liminal multi-sig wallets, we use getTransferStatus instead of getTransactionStatus
+  // This method is removed as it's not needed for multi-sig workflow
+
+  /**
+   * Create a transfer request from cold wallet to hot wallet
+   * This initiates the multi-sig approval process
+   * @param {Object} transferData - Transfer configuration
+   * @returns {Promise<Object>} Transfer request result
+   */
+  async createTransferRequest(transferData) {
     try {
-      logger.info(`Creating transaction with Liminal for ${txns.length} transactions`);
+      logger.info(`Creating transfer request: ${transferData.amount} ${transferData.asset} from cold wallet to hot wallet`);
 
-      // // Check if provider supports this blockchain and asset
-      // if (!this.supportsBlockchain(token.blockchainId)) {
-      //   throw new Error(`Liminal does not support blockchain ID: ${token.blockchainId}`);
-      // }
-
-      // if (!this.supportsAsset(token.symbol, token.blockchainId)) {
-      //   throw new Error(`Liminal does not support asset: ${token.symbol} on blockchain: ${token.blockchainId}`);
-      // }
-
-      // Use wallet factory to create transaction
-      const result = await this.walletFactory.createTransaction(txns, token);
-
-      logger.info(`Transaction created successfully with Liminal`);
-      return result;
+      const transferRequest = await this.walletFactory.createTransferRequest(transferData);
+      return transferRequest;
 
     } catch (error) {
-      logger.error(`Error creating transaction with Liminal: ${error.message}`);
+      logger.error(`Error creating transfer request: ${error.message}`);
       throw error;
     }
   }
 
-  async getTransactionStatus(batchId, token) {
+  /**
+   * Get transfer status for monitoring multi-sig approval progress
+   * @param {string} transferId - Transfer request ID
+   * @param {Object} token - Token configuration object
+   * @returns {Promise<Object>} Transfer status
+   */
+  async getTransferStatus(transferId, token) {
     try {
-      logger.info(`Getting transaction status from Liminal: ${batchId}`);
+      logger.info(`Getting transfer status for: ${transferId}`);
 
-      const result = await this.walletFactory.getTransactionStatus(batchId, token);
-      return result;
+      const status = await this.walletFactory.getTransferStatus(transferId, token);
+      return status;
 
     } catch (error) {
-      logger.error(`Error getting transaction status from Liminal: ${error.message}`);
+      logger.error(`Error getting transfer status: ${error.message}`);
       throw error;
     }
   }
 
-  async getTokenBalance(token) {
+  /**
+   * Get pending transfers for monitoring
+   * @param {Object} token - Token configuration object
+   * @returns {Promise<Array>} List of pending transfers
+   */
+  async getPendingTransfers(token) {
     try {
-      logger.info(`Getting token balance for: ${token.symbol}`);
+      logger.info(`Getting pending transfers for: ${token.symbol}`);
 
-      const balance = await this.walletFactory.getTokenBalance(token);
-      return balance;
+      const transfers = await this.walletFactory.getPendingTransfers(token);
+      return transfers;
 
     } catch (error) {
-      logger.error(`Error getting token balance from Liminal: ${error.message}`);
+      logger.error(`Error getting pending transfers: ${error.message}`);
       throw error;
     }
   }
 
-  async sendTransaction(txn, token) {
-    try {
-      logger.info(`Sending transaction with Liminal`);
-
-      const result = await this.walletFactory.sendTransaction(txn, token);
-      return result;
-
-    } catch (error) {
-      logger.error(`Error sending transaction with Liminal: ${error.message}`);
-      throw error;
-    }
-  }
 
   async validateCredentials() {
     try {
