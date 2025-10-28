@@ -45,6 +45,24 @@ class LiminalProvider extends AbstractProvider {
   // This method is removed as it's not needed for multi-sig workflow
 
   /**
+   * Get token balance for a wallet
+   * @param {Object} token - Token configuration object
+   * @returns {Promise<string>} Balance in atomic units
+   */
+  async getTokenBalance(token) {
+    try {
+      logger.debug(`Getting token balance for: ${token.symbol}`);
+      
+      const balance = await this.walletFactory.getTokenBalance(token);
+      return balance;
+      
+    } catch (error) {
+      logger.error(`Error getting token balance: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Create a transfer request from cold wallet to hot wallet
    * This initiates the multi-sig approval process
    * @param {Object} transferData - Transfer configuration

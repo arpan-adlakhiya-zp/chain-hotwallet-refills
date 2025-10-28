@@ -36,15 +36,13 @@ class WalletFactory {
       let walletId = null;
       if (token.walletConfig && token.walletConfig.liminal && token.walletConfig.liminal.walletId) {
         walletId = token.walletConfig.liminal.walletId;
-      } else if (token.sweepWalletConfig && token.sweepWalletConfig.liminal && token.sweepWalletConfig.liminal.walletId) {
-        walletId = token.sweepWalletConfig.liminal.walletId;
       } else {
         throw new Error("No wallet ID found in token configuration");
       }
 
       // Check if this is a contract token (has contractAddress) or native token
       if (token.contractAddress && token.contractAddress !== 'native') {
-        // Contract token - use Token API
+        // Contract token
         let liminalTokenSymbol = token.symbol.toLowerCase();
 
         // Special cases for specific tokens on specific chains
@@ -66,7 +64,7 @@ class WalletFactory {
           .Wallets()
           .Get({ walletId: walletId, allTokens: true });
       } else {
-        // Native token - use Coin API
+        // Native token
         let coinSymbol = token.symbol.toLowerCase();
         
         // Special case for ATOM
@@ -86,6 +84,31 @@ class WalletFactory {
       throw error;
     }
     return wallet;
+  }
+
+  /**
+   * Get token balance for a wallet
+   * @param {Object} token - Token configuration object
+   * @returns {Promise<string>} Balance in atomic units
+   */
+  async getTokenBalance(token) {
+    try {
+      const wallet = await this.getWallet(token);
+      if (!wallet) {
+        throw new Error("Unable to get wallet instance");
+      }
+      
+      // Get balance from wallet - use the wallet's address for GetAddressBalance
+      const walletAddress = wallet.WalletAddress;
+      const balance = await wallet.GetBalance({ address: walletAddress });
+      
+      logger.debug(`Token balance for ${token.symbol}: ${balance.spendableBalanceInLowerDenom}`);
+      return balance.spendableBalanceInLowerDenom;
+      
+    } catch (error) {
+      logger.error("Error getting token balance:", error);
+      throw error;
+    }
   }
 
   /**
@@ -126,7 +149,7 @@ class WalletFactory {
           wallet: {
             coin: asset.toLowerCase(),
             walletId: parseInt(coldWalletId),
-            allToken: false,
+            allToken: true,
             tokenOptions: transferData.contractAddress && transferData.contractAddress !== 'native' ? {
               tokenName: asset,
               tokenAddress: transferData.contractAddress
@@ -142,7 +165,6 @@ class WalletFactory {
                 amount: amount
               }],
               sequenceId: sequenceId,
-              isInternal: true
             }
           }
         };

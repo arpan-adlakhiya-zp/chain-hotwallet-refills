@@ -1,10 +1,10 @@
 const BigNumber = require('bignumber.js');
 const logger = require('../middleware/logger')('refillValidationService');
 const databaseService = require('./chainDb');
+const refillUtils = require('./utils/utils');
 
 /**
- * Refill Validation Service
- * Simplified validation service that focuses on essential checks only
+ * Refill Request Validation Service
  */
 class RefillValidationService {
   constructor() {
@@ -12,124 +12,155 @@ class RefillValidationService {
   }
 
   /**
-   * Main validation method - simplified and streamlined
+   * Validates a hot wallet refill request, checking field presence, asset configuration,
+   * blockchain support, sweep wallet configuration, and balance-related rules.
+   *
+   * @param {Object} refillData - The refill request data.
+   * @returns {Object} The validation result object.
+   *   - success {boolean}: true if the refill request is valid, false otherwise.
+   *   - error {string}: the error message if the refill request is not valid.
+   *   - code {string}: the error code if the refill request is not valid.
+   *   - data {Object}: the validated data if the refill request is valid.
    */
   async validateRefillRequest(refillData) {
     try {
       logger.info(`Validating refill request for wallet: ${refillData.wallet_address}`);
 
-      // Step 1: Validate required fields
+      // Validate required fields
       const fieldValidation = this.validateRequiredFields(refillData);
-      if (!fieldValidation.isValid) {
+      if (!fieldValidation.success) {
         return {
-          isValid: false,
-          error: `Missing required fields: ${fieldValidation.missingFields.join(', ')}`,
-          code: 'MISSING_FIELDS'
+          success: false,
+          error: fieldValidation.error,
+          code: fieldValidation.code,
+          data: fieldValidation.data
         };
       }
 
-      // Step 2: Get blockchain details
+      // Validate blockchain exists and is active
       const blockchain = await databaseService.getBlockchainByName(refillData.chain_name.toLowerCase());
       if (!blockchain) {
         return {
-          isValid: false,
+          success: false,
           error: 'Blockchain not found',
-          code: 'BLOCKCHAIN_NOT_FOUND'
+          code: 'BLOCKCHAIN_NOT_FOUND',
+          data: {
+            chainName: refillData.chain_name
+          }
         };
       }
 
-      console.log('Blockchain:', JSON.stringify(blockchain, null, 2));
-
-      // Step 3: Validate asset exists and is active
+      // Validate asset exists and is active
       const assetValidation = await this.validateAsset(refillData.asset_symbol.toUpperCase(), blockchain.id);
-      if (!assetValidation.isValid) {
+      if (!assetValidation.success) {
         return assetValidation;
       }
 
-      console.log('Asset Validation:', JSON.stringify(assetValidation, null, 2));
-
-      // Step 4: Determine the correct hot wallet address based on token type
+      // Determine the correct hot wallet address based on token type
       const hotWalletAddress = await this.determineHotWalletAddress(refillData, assetValidation.asset);
 
-      console.log('Hot Wallet Address:', JSON.stringify(hotWalletAddress, null, 2));
-
-      // Step 5: Validate refill_sweep_wallet matches the asset's configured sweep wallet
+      // Validate refill_sweep_wallet matches the asset's configured sweep wallet
       const sweepWalletValidation = await this.validateRefillSweepWallet(
         refillData.refill_sweep_wallet,
-        assetValidation.asset
+        assetValidation.data.asset
       );
-
-      console.log('Sweep Wallet Validation:', JSON.stringify(sweepWalletValidation, null, 2));
-
-      if (!sweepWalletValidation.isValid) {
+      if (!sweepWalletValidation.success) {
         return sweepWalletValidation;
       }
 
-      // Step 6: Get provider instance (passed from refillService)
+      // Get provider instance
       const provider = refillData.provider;
       if (!provider) {
         return {
-          isValid: false,
+          success: false,
           error: 'Provider instance not available for balance validation',
-          code: 'PROVIDER_NOT_AVAILABLE'
+          code: 'PROVIDER_NOT_AVAILABLE',
+          data: null
         };
       }
 
-      console.log('Provider:', provider.constructor.name, 'initialized successfully');
-
-      // Step 7: Validate cold wallet has sufficient balance (real-time)
+      // Validate cold wallet has sufficient balance
       const coldWalletValidation = await this.validateColdWalletBalance(
-        assetValidation.asset,
+        assetValidation.data.asset,
         refillData.refill_amount,
         provider
       );
-
-      console.log('Cold Wallet Balance Validation:', JSON.stringify(coldWalletValidation, null, 2));
-
-      if (!coldWalletValidation.isValid) {
+      if (!coldWalletValidation.success) {
         return coldWalletValidation;
       }
 
-      // Step 8: Check if hot wallet needs refill (includes amount validation and real-time balance check)
+      // Check if hot wallet needs refill
       const hotWalletValidation = await this.validateHotWalletNeedsRefill(
         hotWalletAddress,
-        assetValidation.asset.id,
         refillData.refill_amount,
         provider,
-        assetValidation.asset
+        assetValidation.data.asset
       );
-
-      console.log('Hot Wallet Validation:', JSON.stringify(hotWalletValidation, null, 2));
-
-      if (!hotWalletValidation.isValid) {
+      if (!hotWalletValidation.success) {
         return hotWalletValidation;
       }
 
       logger.info(`Refill request validation successful for wallet: ${refillData.wallet_address}`);
 
       return {
-        isValid: true,
+        success: true,
+        error: null,
+        code: null,
         data: {
-          wallet: hotWalletValidation.wallet,
-          asset: assetValidation.asset,
-          blockchain: blockchain,
-          coldWallet: coldWalletValidation,
-          refillAmountAtomic: hotWalletValidation.refillAmountAtomic
+          wallet: {
+            id: hotWalletValidation.data.wallet.id,
+            address: hotWalletValidation.data.wallet.address,
+            name: hotWalletValidation.data.wallet.name,
+            walletType: hotWalletValidation.data.wallet.walletType,
+            hotWalletConfig: hotWalletValidation.data.wallet.hotWalletConfig
+          },
+          asset: {
+            id: assetValidation.data.asset.id,
+            symbol: assetValidation.data.asset.symbol,
+            name: assetValidation.data.asset.name,
+            contractAddress: assetValidation.data.asset.contractAddress,
+            decimals: assetValidation.data.asset.decimals,
+            refillSweepWallet: assetValidation.data.asset.refillSweepWallet,
+            sweepWalletConfig: assetValidation.data.asset.sweepWalletConfig,
+            hotWalletConfig: assetValidation.data.asset.hotWalletConfig,
+            refillTargetBalanceAtomic: assetValidation.data.asset.refillTargetBalanceAtomic,
+            refillTriggerThresholdAtomic: assetValidation.data.asset.refillTriggerThresholdAtomic
+          },
+          blockchain: {
+            id: blockchain.id,
+            name: blockchain.name,
+            symbol: blockchain.symbol,
+            chainId: blockchain.chainId,
+            nativeAssetSymbol: blockchain.nativeAssetSymbol
+          },
+          coldWallet: coldWalletValidation.data,
+          hotWalletBalance: hotWalletValidation.data.currentBalance,
+          hotWalletTargetBalance: hotWalletValidation.data.targetBalance,
+          hotWalletTriggerThreshold: hotWalletValidation.data.triggerThreshold,
+          refillAmountAtomic: hotWalletValidation.data.refillAmountAtomic
         }
       };
-
     } catch (error) {
       logger.error(`Error validating refill request: ${error.message}`);
       return {
-        isValid: false,
+        success: false,
         error: 'Internal validation error',
-        code: 'VALIDATION_ERROR'
+        code: 'VALIDATION_ERROR',
+        data: {
+          details: error.message
+        }
       };
     }
   }
 
   /**
-   * Validate required fields are present
+   * Validate required fields are present in the refill request data.
+   * @param {Object} refillData - The refill request data to validate.
+   * @returns {Object} The validation result object.
+   *   - success {boolean}: true if all required fields are present, false otherwise.
+   *   - error {string}: the error message if the required fields are not present.
+   *   - code {string}: the error code if the required fields are not present.
+   *   - data {Object}: the data if the required fields are present.
    */
   validateRequiredFields(refillData) {
     const requiredFields = [
@@ -144,13 +175,20 @@ class RefillValidationService {
     const missingFields = requiredFields.filter(field => !refillData[field]);
 
     return {
-      isValid: missingFields.length === 0,
-      missingFields
+      success: missingFields.length === 0,
+      error: missingFields.length > 0 ? `Missing required fields: ${missingFields.join(', ')}` : null,
+      code: missingFields.length > 0 ? 'MISSING_FIELDS' : null,
+      data: {
+        missingFields
+      }
     };
   }
 
   /**
    * Determine the correct hot wallet address based on token type
+   * @param {Object} refillData - The refill request data.
+   * @param {Object} asset - The asset data.
+   * @returns {string} The correct hot wallet address.
    */
   async determineHotWalletAddress(refillData, asset) {
     // - For native tokens: use the wallet_address from refillData
@@ -169,6 +207,13 @@ class RefillValidationService {
 
   /**
    * Validate asset exists and is active
+   * @param {string} assetSymbol - The symbol of the asset to validate.
+   * @param {number} blockchainId - The ID of the blockchain to validate the asset on.
+   * @returns {Object} The validation result object.
+   *   - success {boolean}: true if the asset exists and is active, false otherwise.
+   *   - error {string}: the error message if the asset does not exist or is inactive.
+   *   - code {string}: the error code if the asset does not exist or is inactive.
+   *   - data {Object}: the data if the asset exists and is active.
    */
   async validateAsset(assetSymbol, blockchainId) {
     try {
@@ -176,156 +221,228 @@ class RefillValidationService {
 
       if (!asset) {
         return {
-          isValid: false,
+          success: false,
           error: 'Asset not found or inactive',
-          code: 'ASSET_NOT_FOUND'
+          code: 'ASSET_NOT_FOUND',
+          data: {
+            assetSymbol,
+            blockchainId
+          }
         };
       }
 
       return {
-        isValid: true,
-        asset
+        success: true,
+        error: null,
+        code: null,
+        data: {
+          asset
+        }
       };
     } catch (error) {
       logger.error(`Error validating asset: ${error.message}`);
       return {
-        isValid: false,
+        success: false,
         error: 'Database error while validating asset',
-        code: 'ASSET_VALIDATION_ERROR'
+        code: 'ASSET_VALIDATION_ERROR',
+        data: {
+          details: error.message
+        }
       };
     }
   }
 
   /**
    * Validate refill_sweep_wallet matches the asset's configured sweep wallet
+   * @param {string} refillSweepWallet - The address of the refill sweep wallet to validate.
+   * @param {Object} asset - The asset data.
+   * @returns {Object} The validation result object.
+   *   - success {boolean}: true if the refill sweep wallet matches the asset's configured sweep wallet, false otherwise.
+   *   - error {string}: the error message if the refill sweep wallet does not match the asset's configured sweep wallet.
+   *   - code {string}: the error code if the refill sweep wallet does not match the asset's configured sweep wallet.
+   *   - data {Object}: the data if the refill sweep wallet matches the asset's configured sweep wallet.
    */
   async validateRefillSweepWallet(refillSweepWallet, asset) {
     try {
       if (!asset.refillSweepWallet) {
         return {
-          isValid: false,
+          success: false,
           error: 'No sweep wallet configured for this asset',
-          code: 'NO_SWEEP_WALLET_CONFIGURED'
+          code: 'NO_SWEEP_WALLET_CONFIGURED',
+          data: {
+            assetSymbol: asset.symbol,
+            refillSweepWallet
+          }
         };
       }
 
       if (refillSweepWallet !== asset.refillSweepWallet) {
         return {
-          isValid: false,
+          success: false,
           error: `Refill sweep wallet mismatch. Expected: ${asset.refillSweepWallet}, Got: ${refillSweepWallet}`,
-          code: 'SWEEP_WALLET_MISMATCH'
+          code: 'SWEEP_WALLET_MISMATCH',
+          data: {
+            expected: asset.refillSweepWallet,
+            received: refillSweepWallet
+          }
         };
       }
 
       return {
-        isValid: true
+        success: true,
+        error: null,
+        code: null,
+        data: null
       };
     } catch (error) {
       logger.error(`Error validating refill sweep wallet: ${error.message}`);
       return {
-        isValid: false,
+        success: false,
         error: 'Error validating refill sweep wallet',
-        code: 'SWEEP_WALLET_VALIDATION_ERROR'
+        code: 'SWEEP_WALLET_VALIDATION_ERROR',
+        data: {
+          details: error.message
+        }
       };
     }
   }
 
   /**
    * Validate cold wallet has sufficient balance (real-time)
-   * Gets cold wallet address from asset.refillSweepWallet and checks balance on-chain
+   * @param {Object} asset - The asset data.
+   * @param {number} refillAmount - The amount to refill.
+   * @param {Object} provider - The provider instance.
+   * @returns {Object} The validation result object.
+   *   - success {boolean}: true if the cold wallet has sufficient balance, false otherwise.
+   *   - error {string}: the error message if the cold wallet does not have sufficient balance.
+   *   - code {string}: the error code if the cold wallet does not have sufficient balance.
+   *   - data {Object}: the data if the cold wallet has sufficient balance.
    */
   async validateColdWalletBalance(asset, refillAmount, provider) {
     try {
       // Get cold wallet configuration from asset
       const sweepWalletConfig = asset.sweepWalletConfig;
-      
-      if (!sweepWalletConfig || !sweepWalletConfig.liminal || !sweepWalletConfig.liminal.walletId) {
+
+      if (!sweepWalletConfig || !sweepWalletConfig.provider) {
         return {
-          isValid: false,
+          success: false,
           error: 'No cold wallet configuration found for this asset',
-          code: 'NO_COLD_WALLET_CONFIGURED'
+          code: 'NO_COLD_WALLET_CONFIGURED',
+          data: {
+            assetSymbol: asset.symbol
+          }
         };
       }
 
-      // For Liminal, we can now check the cold wallet balance using the walletId
-      const coldWalletId = sweepWalletConfig.liminal.walletId;
-      
-      logger.info(`Cold wallet ID configured: ${coldWalletId}`);
-      
-      // Create token info for cold wallet balance check
+      const providerName = sweepWalletConfig.provider;
+      let coldWalletId = null;
+      let walletConfig = null;
+
+      // Configure token info based on provider using utility function
+      const walletConfigResult = refillUtils.getWalletConfig(providerName, sweepWalletConfig);
+      if (!walletConfigResult.success) {
+        return walletConfigResult;
+      }
+
+      walletConfig = walletConfigResult.data.walletConfig;
+
+      // Extract cold wallet ID from the wallet config
+      if (providerName === 'liminal') {
+        coldWalletId = walletConfig.liminal.walletId;
+      } else if (providerName === 'fireblocks') {
+        coldWalletId = walletConfig.fireblocks.vaultId;
+      }
+
       const tokenInfo = {
         symbol: asset.symbol,
         blockchainSymbol: asset.Blockchain.symbol,
         contractAddress: asset.contractAddress === 'native' ? null : asset.contractAddress,
-        decimalPlaces: asset.decimals || 18,
-        walletConfig: {
-          liminal: {
-            walletId: coldWalletId // Use cold wallet ID for balance check
-          },
-          fireblocks: {}
-        }
+        decimalPlaces: asset.decimals,
+        walletConfig: walletConfig
       };
 
-      // Get real-time balance from Liminal
+      // Get real-time balance from provider
       const onChainBalance = await provider.getTokenBalance(tokenInfo);
       const availableBalance = new BigNumber(onChainBalance);
-      
       const refillAmountBigNumber = new BigNumber(refillAmount);
-      const decimals = asset.decimals || 18;
-      const requiredAmount = refillAmountBigNumber.multipliedBy(new BigNumber(10).pow(decimals));
+      const requiredAmount = refillAmountBigNumber.multipliedBy(new BigNumber(10).pow(asset.decimals));
 
       if (availableBalance.lt(requiredAmount)) {
         return {
-          isValid: false,
+          success: false,
           error: `Insufficient cold wallet balance. Available: ${availableBalance.toString()}, Required: ${requiredAmount.toString()}`,
           code: 'INSUFFICIENT_BALANCE',
-          details: {
+          data: {
             availableBalance: availableBalance.toString(),
             requiredAmount: requiredAmount.toString(),
             coldWalletId: coldWalletId,
+            provider: providerName,
             checkedAt: new Date().toISOString()
           }
         };
       }
 
       return {
-        isValid: true,
-        coldWalletId,
-        availableBalance: availableBalance.toString(),
-        message: 'Cold wallet has sufficient balance'
+        success: true,
+        error: null,
+        code: null,
+        data: {
+          coldWalletId,
+          availableBalance: availableBalance.toString(),
+          provider: providerName,
+          message: 'Cold wallet has sufficient balance'
+        }
       };
     } catch (error) {
       logger.error(`Error validating cold wallet balance: ${error.message}`);
       return {
-        isValid: false,
+        success: false,
         error: 'Error fetching cold wallet balance from blockchain',
-        code: 'BALANCE_VALIDATION_ERROR'
+        code: 'BALANCE_VALIDATION_ERROR',
+        data: {
+          details: error.message
+        }
       };
     }
   }
 
   /**
    * Validate hot wallet needs refill (includes amount validation and real-time balance check)
+   * @param {string} walletAddress - The address of the wallet to validate.
+   * @param {number} refillAmount - The amount to refill.
+   * @param {Object} provider - The provider instance.
+   * @param {Object} asset - The asset data.
+   * @returns {Object} The validation result object.
+   *   - success {boolean}: true if the hot wallet needs refill, false otherwise.
+   *   - error {string}: the error message if the hot wallet does not need refill.
+   *   - code {string}: the error code if the hot wallet does not need refill.
+   *   - data {Object}: the data if the hot wallet needs refill.
    */
-  async validateHotWalletNeedsRefill(walletAddress, assetId, refillAmount, provider, asset) {
+  async validateHotWalletNeedsRefill(walletAddress, refillAmount, provider, asset) {
     try {
       // Get wallet details to validate it exists and get wallet info
       const wallet = await databaseService.getWalletByAddress(walletAddress);
       if (!wallet) {
         return {
-          isValid: false,
+          success: false,
           error: 'Hot wallet not found',
-          code: 'HOT_WALLET_NOT_FOUND'
+          code: 'HOT_WALLET_NOT_FOUND',
+          data: {
+            walletAddress
+          }
         };
       }
-      console.log('Wallet:', JSON.stringify(wallet, null, 2));
 
       // Validate wallet type
       if (wallet.walletType !== 'hot') {
         return {
-          isValid: false,
+          success: false,
           error: 'Wallet is not a hot wallet',
-          code: 'INVALID_WALLET_TYPE'
+          code: 'INVALID_WALLET_TYPE',
+          data: {
+            walletAddress,
+            walletType: wallet.walletType
+          }
         };
       }
 
@@ -333,43 +450,53 @@ class RefillValidationService {
       const refillAmountBigNumber = new BigNumber(refillAmount);
       if (refillAmountBigNumber.lte(0)) {
         return {
-          isValid: false,
+          success: false,
           error: 'Refill amount must be positive',
-          code: 'INVALID_AMOUNT'
+          code: 'INVALID_AMOUNT',
+          data: {
+            refillAmount
+          }
         };
       }
 
       // Convert refill amount to atomic units
-      const decimals = asset.decimals || 18;
+      const decimals = asset.decimals;
       const refillAmountAtomic = refillAmountBigNumber.multipliedBy(new BigNumber(10).pow(decimals));
 
       // Get real-time balance from on-chain using the provider SDK
+      const hotWalletConfig = asset.hotWalletConfig;
+      const providerName = hotWalletConfig.provider;
+
+      let walletConfig = null;
+
+      // Configure token info based on provider using utility function
+      const walletConfigResult = refillUtils.getWalletConfig(providerName, hotWalletConfig);
+      if (!walletConfigResult.success) {
+        return walletConfigResult;
+      }
+
+      walletConfig = walletConfigResult.data.walletConfig;
+
       const tokenInfo = {
         symbol: asset.symbol,
         blockchainSymbol: asset.Blockchain.symbol,
         contractAddress: asset.contractAddress === 'native' ? null : asset.contractAddress,
-        decimalPlaces: asset.decimals || 18,
-        walletConfig: {
-          liminal: {
-            walletId: wallet.hotWalletConfig.liminal.walletId
-          },
-          fireblocks: {}
-        }
+        decimalPlaces: asset.decimals,
+        walletConfig: walletConfig
       };
 
       const onChainBalance = await provider.getTokenBalance(tokenInfo);
-      const currentBalance = new BigNumber(onChainBalance).multipliedBy(new BigNumber(10).pow(-4)); // TODO: simulating low balance
-      console.log('Current Balance:', currentBalance.toString());
+      const currentBalance = new BigNumber(onChainBalance);
       const targetBalance = new BigNumber(asset.refillTargetBalanceAtomic || 0);
       const triggerThreshold = new BigNumber(asset.refillTriggerThresholdAtomic || 0);
 
       // Check if hot wallet already has sufficient balance
       if (currentBalance.gte(targetBalance) && targetBalance.gt(0)) {
         return {
-          isValid: false,
+          success: false,
           error: 'Hot wallet already has sufficient balance',
           code: 'SUFFICIENT_BALANCE',
-          details: {
+          data: {
             current: currentBalance.toString(),
             target: targetBalance.toString(),
             checkedAt: new Date().toISOString()
@@ -380,10 +507,10 @@ class RefillValidationService {
       // Check if current balance is above trigger threshold
       if (currentBalance.gte(triggerThreshold) && triggerThreshold.gt(0)) {
         return {
-          isValid: false,
+          success: false,
           error: 'Hot wallet balance is above trigger threshold',
           code: 'ABOVE_TRIGGER_THRESHOLD',
-          details: {
+          data: {
             current: currentBalance.toString(),
             threshold: triggerThreshold.toString(),
             checkedAt: new Date().toISOString()
@@ -392,57 +519,27 @@ class RefillValidationService {
       }
 
       return {
-        isValid: true,
-        wallet: wallet,
-        currentBalance: currentBalance.toString(),
-        targetBalance: targetBalance.toString(),
-        triggerThreshold: triggerThreshold.toString(),
-        refillAmountAtomic: refillAmountAtomic.toString(),
-        message: 'Hot wallet needs refill'
+        success: true,
+        error: null,
+        code: null,
+        data: {
+          wallet: wallet,
+          currentBalance: currentBalance.toString(),
+          targetBalance: targetBalance.toString(),
+          triggerThreshold: triggerThreshold.toString(),
+          refillAmountAtomic: refillAmountAtomic.toString(),
+          message: 'Hot wallet needs refill'
+        }
       };
     } catch (error) {
       logger.error(`Error validating hot wallet refill need: ${error.message}`);
       return {
-        isValid: false,
+        success: false,
         error: 'Error fetching hot wallet balance from blockchain',
-        code: 'HOT_WALLET_VALIDATION_ERROR'
-      };
-    }
-  }
-
-  /**
-   * Check for recent refill requests to avoid duplicates
-   */
-  async validateNoRecentRefillRequests(walletAddress, assetId, hoursBack = 24) {
-    try {
-      const recentRequests = await databaseService.getRecentRefillRequests(walletAddress, assetId, hoursBack);
-
-      // Check for pending or unresolved requests
-      const activeRequests = recentRequests.filter(req =>
-        ['PENDING', 'PROCESSING', 'IN_PROGRESS'].includes(req.status)
-      );
-
-      if (activeRequests.length > 0) {
-        return {
-          isValid: false,
-          error: 'There are already pending refill requests for this wallet and asset',
-          code: 'PENDING_REQUESTS_EXIST',
-          details: {
-            pendingRequests: activeRequests.length,
-            lastRequestTime: activeRequests[0].created_at
-          }
-        };
-      }
-
-      return {
-        isValid: true
-      };
-    } catch (error) {
-      logger.error(`Error checking recent refill requests: ${error.message}`);
-      return {
-        isValid: false,
-        error: 'Database error while checking recent requests',
-        code: 'RECENT_REQUESTS_CHECK_ERROR'
+        code: 'HOT_WALLET_VALIDATION_ERROR',
+        data: {
+          details: error.message
+        }
       };
     }
   }

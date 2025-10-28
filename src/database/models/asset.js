@@ -106,6 +106,10 @@ module.exports = (sequelize, DataTypes) => {
       field: 'sweep_wallet_config',
       type: DataTypes.JSON
     },
+    hotWalletConfig: {
+      field: 'hot_wallet_config',
+      type: DataTypes.JSON
+    },
     blockchainId: {
       field: 'blockchain_id',
       type: DataTypes.INTEGER,
