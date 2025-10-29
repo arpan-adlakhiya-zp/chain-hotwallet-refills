@@ -56,14 +56,12 @@ class FireblocksProvider extends AbstractProvider {
     }
   }
 
-  async getTransactionStatus(batchId, token) {
+  async getTransactionById(txnId) {
     try {
-      logger.info(`Getting transaction status from Fireblocks: ${batchId}`);
+      logger.info(`Getting transaction by ID from Fireblocks: ${txnId}`);
 
-      const externalId = `${batchId}_${token.symbol}`;
-      const result = await this.transaction.getTransactionByExternalTxId(externalId);
+      const result = await this.transaction.getTransactionById(txnId);
       return result;
-
     } catch (error) {
       logger.error(`Error getting transaction status from Fireblocks: ${error.message}`);
       throw error;
@@ -94,7 +92,7 @@ class FireblocksProvider extends AbstractProvider {
    */
   async createTransferRequest(transferData) {
     try {
-      const { coldWalletId, hotWalletId, amount, asset, assetId, blockchain } = transferData;
+      const { coldWalletId, hotWalletId, amount, asset, assetId, blockchain, externalTxId } = transferData;
       
       logger.info(`Creating Fireblocks vault-to-vault transfer request: ${amount} ${asset} from vault ${coldWalletId} to vault ${hotWalletId}`);
       
@@ -102,12 +100,12 @@ class FireblocksProvider extends AbstractProvider {
         throw new Error(`Missing asset ID, cold wallet ID, or hot wallet ID for asset ${asset} on blockchain ${blockchain}`);
       }
 
-      // Generate unique external transaction ID
-      const externalTxId = `fireblocks_refill_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Use provided externalTxId or generate one if not provided
+      const txId = externalTxId || `fireblocks_refill_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       // Prepare transaction data for vault-to-vault transfer
       const transactionData = {
-        externalTxId: externalTxId,
+        externalTxId: txId,
         assetId: assetId,
         amount: amount,
         feeLevel: FeeLevel.MEDIUM,
@@ -129,10 +127,9 @@ class FireblocksProvider extends AbstractProvider {
       logger.info(`Vault-to-vault transfer request created successfully with Fireblocks`, result);
       
       return {
-        id: result.id,
         status: result.status,
         message: 'Vault-to-vault transfer request submitted to Fireblocks',
-        externalTxId: externalTxId,
+        externalTxId: txId,
         transactionId: result.id,
         createdAt: new Date().toISOString(),
         result: result

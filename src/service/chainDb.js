@@ -207,7 +207,6 @@ class DatabaseService {
       }
 
       const sweepWalletAddress = asset.refillSweepWallet;
-      console.log('Sweep Wallet Address:', sweepWalletAddress);
 
       // Now find the wallet with this address
       const coldWallet = await walletHelper.getWalletByAddress(sweepWalletAddress);

@@ -54,17 +54,13 @@ class Transaction {
    * @param {string} txId - Transaction ID
    * @returns {Promise<Object>} Transaction status
    */
-  async getTransactionStatus(txId) {
+  async getTransactionById(txId) {
     try {
       logger.debug(`Getting transaction status for: ${txId}`);
-      const status = await this.fireblocks.getTransactionById(txId);
-      logger.debug('Transaction status:', status);
-      
-      return {
-        status: status.status || 'unknown',
-        transactionId: txId,
-        details: status
-      };
+      const result = await this.fireblocks.getTransactionById(txId);
+      logger.debug('Transaction found:', result);
+
+      return result;
     } catch (error) {
       logger.error("Error getting transaction status:", error);
       throw error;

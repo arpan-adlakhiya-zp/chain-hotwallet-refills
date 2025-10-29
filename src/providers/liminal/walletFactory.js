@@ -119,7 +119,7 @@ class WalletFactory {
    */
   async createTransferRequest(transferData) {
     try {
-      const { coldWalletId, hotWalletAddress, amount, asset, blockchain } = transferData;
+      const { coldWalletId, hotWalletAddress, amount, asset, blockchain, externalTxId } = transferData;
       
       logger.debug(`Creating transfer request: ${amount} ${asset} from cold wallet ${coldWalletId} to ${hotWalletAddress}`);
       
@@ -134,8 +134,8 @@ class WalletFactory {
         throw new Error("Unable to get cold wallet instance");
       }
       
-      // Generate unique sequence ID for the transaction
-      const sequenceId = `refill_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Use provided externalTxId or generate one if not provided
+      const sequenceId = externalTxId || `refill_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       logger.debug("Creating transfer request using Liminal SDK SendMany method");
       

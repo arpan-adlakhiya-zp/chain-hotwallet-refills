@@ -1,12 +1,13 @@
 const logger = require("../middleware/logger")("refillService");
 const refillValidationService = require("./refillValidationService");
+const refillTransactionService = require("./refillTransactionService");
+const providerService = require("./providerService");
 const refillUtils = require("./utils/utils");
 const BigNumber = require('bignumber.js');
 
 class RefillService {
   constructor() {
     this.initialized = false;
-    this.providers = new Map();
   }
 
   /**
@@ -19,14 +20,21 @@ class RefillService {
     }
 
     try {
-      await refillUtils.initializeProviders(this.providers);
-
+      await providerService.initialize();
       this.initialized = true;
       logger.info('Refill service initialized with providers');
     } catch (error) {
       logger.error(`Failed to initialize refill service: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Get the providers map
+   * @returns {Map} Map of initialized providers
+   */
+  get providers() {
+    return providerService.getProviders();
   }
 
   /**
@@ -43,13 +51,13 @@ class RefillService {
       // Ensure service is initialized
       await this.initialize();
 
-      logger.info(`Processing refill request for wallet: ${refillData.wallet_address}`);
+      const refillRequestId = refillData.refill_request_id;
+      logger.info(`Processing refill request for wallet: ${refillData.wallet_address}, request ID: ${refillRequestId}`);
 
       // Get the provider for this token
-      const provider = await refillUtils.getTokenProvider(
+      const provider = await providerService.getTokenProvider(
         refillData.chain_name,
-        refillData.asset_symbol,
-        this.providers
+        refillData.asset_symbol
       );
 
       if (!provider) {
@@ -66,6 +74,8 @@ class RefillService {
         };
       }
 
+      const providerName = provider.constructor.getProviderName();
+
       // Validate the refill request
       refillData.provider = provider; // Pass provider to validation
       const validationResult = await refillValidationService.validateRefillRequest(refillData);
@@ -80,15 +90,43 @@ class RefillService {
       }
 
       const validatedData = validationResult.data;
-      console.log('Validated Data:', JSON.stringify(validatedData, null, 2));
-      logger.info(`Refill request validated successfully for wallet: ${refillData.wallet_address}`);
+      logger.debug(`Validated Data: ${JSON.stringify(validatedData, null, 2)}`);
+      logger.info(`Refill request validated successfully for wallet: ${refillData.wallet_address}, request ID: ${refillRequestId}`);
 
-      logger.info(`Selected provider: ${provider.constructor.getProviderName()}`);
+      // Create initial transaction record on successful validation
+      const transactionData = {
+        refillRequestId: refillRequestId,
+        provider: providerName,
+        status: 'PENDING',
+        amountAtomic: validatedData.refillAmountAtomic,
+        tokenSymbol: validatedData.asset.symbol
+      };
+
+      const createTransactionResult = await refillTransactionService.createRefillTransaction(transactionData);
+      if (!createTransactionResult.success) {
+        logger.error(`Failed to create transaction record: ${createTransactionResult.error}`);
+        return {
+          success: false,
+          error: 'Failed to create transaction record',
+          code: 'TRANSACTION_CREATION_ERROR',
+          data: createTransactionResult.data
+        };
+      }
+
+      logger.info(`Selected provider: ${providerName}`);
 
       // Initiate transaction with selected provider
-      const transactionResult = await this.initiateRefill(validatedData, provider);
-
+      const transactionResult = await this.initiateRefill(validatedData, provider, refillRequestId);
       if (!transactionResult.success) {
+        logger.error(`Failed to initiate refill: ${transactionResult.error}`);
+
+        // Update transaction record with error
+        if (refillRequestId) {
+          await refillTransactionService.updateRefillTransaction(refillRequestId, {
+            status: 'FAILED',
+            message: transactionResult.error
+          });
+        }
         return {
           success: false,
           error: transactionResult.error,
@@ -97,19 +135,29 @@ class RefillService {
         };
       }
 
-      logger.info(`Refill request initiated successfully. Transaction ID: ${transactionResult.data.transferId}, Provider: ${provider.constructor.getProviderName()}`);
+      const txnStatus = refillTransactionService.mapProviderStatusToInternal(providerName, transactionResult.data.status);
+
+      // Update transaction record on success
+      await refillTransactionService.updateRefillTransaction(refillRequestId, {
+        status: txnStatus,
+        providerTxId: transactionResult.data.transferId
+      });
+
+      logger.info(`Refill request initiated successfully. Transaction ID: ${transactionResult.data.transferId}, Provider: ${providerName}`);
 
       return {
         success: true,
         error: null,
         code: null,
         data: {
+          refillRequestId: refillRequestId,
           transactionId: transactionResult.data.transferId,
           walletAddress: refillData.wallet_address,
           assetSymbol: refillData.asset_symbol,
           refillAmount: refillData.refill_amount,
-          status: transactionResult.data.status,
-          provider: provider.constructor.getProviderName()
+          status: txnStatus,
+          provider: providerName,
+          transaction: transactionResult.data.transaction
         }
       };
 
@@ -130,15 +178,16 @@ class RefillService {
    * Initiate a refill transfer request
    * @param {Object} validatedData - The validated data from the refill request
    * @param {Object} provider - The provider instance
+   * @param {string} refillRequestId - External refill request ID for tracking
    * @returns {Promise<Object>}
    *   - success {boolean}: true if the refill request is initiated successfully, false otherwise.
    *   - error {string}: the error message if the refill request is not initiated successfully.
    *   - code {string}: the error code if the refill request is not initiated successfully.
    *   - data {Object}: the data if the refill request is initiated successfully.
    */
-  async initiateRefill(validatedData, provider) {
+  async initiateRefill(validatedData, provider, refillRequestId) {
     try {
-      logger.info(`Initiating refill transfer request with provider: ${provider.constructor.getProviderName()}`);
+      logger.info(`Initiating refill transfer request with provider: ${provider.constructor.getProviderName()}, request ID: ${refillRequestId}`);
 
       const atomicAmount = new BigNumber(validatedData.refillAmountAtomic);
       const decimals = new BigNumber(10).pow(validatedData.asset.decimals);
@@ -153,20 +202,22 @@ class RefillService {
         asset: validatedData.asset.symbol,
         assetId: provider.constructor.getProviderName() === 'fireblocks' ? validatedData.asset.sweepWalletConfig.fireblocks.assetId : "",
         blockchain: validatedData.blockchain.symbol,
-        contractAddress: validatedData.asset.contractAddress
+        contractAddress: validatedData.asset.contractAddress,
+        externalTxId: refillRequestId // For idempotency
       };
 
       const transferRequest = await provider.createTransferRequest(transferData);
 
-      logger.info(`Transfer request created successfully with ${provider.constructor.getProviderName()}`);
+      logger.info(`Transfer request submitted successfully with ${provider.constructor.getProviderName()}`);
 
       return {
         success: true,
         error: null,
         code: null,
         data: {
+          refillRequestId: refillRequestId,
           transferId: transferRequest.id || transferRequest.transferId || transferRequest.transactionId,
-          status: transferRequest.status || 'pending',
+          status: transferRequest.status,
           message: transferRequest.message || 'Transfer request created successfully',
           transferRequest: transferRequest
         }
@@ -225,6 +276,7 @@ class RefillService {
       };
     }
   }
+
 
 }
 

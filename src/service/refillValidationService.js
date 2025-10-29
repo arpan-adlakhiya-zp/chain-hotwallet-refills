@@ -164,6 +164,7 @@ class RefillValidationService {
    */
   validateRequiredFields(refillData) {
     const requiredFields = [
+      'refill_request_id',
       'wallet_address',
       'asset_symbol',
       'asset_address',

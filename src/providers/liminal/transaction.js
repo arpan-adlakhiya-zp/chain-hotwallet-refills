@@ -79,7 +79,7 @@ class Transaction {
         params.tsmCreds = tsmCreds;
         logger.debug('TSM credentials added to signing parameters');
       } else {
-        logger.warn('TSM credentials not found - signing may fail');
+        logger.debug('TSM credentials not found - signing may fail');
       }
 
       logger.debug({ signTransaction: params });
