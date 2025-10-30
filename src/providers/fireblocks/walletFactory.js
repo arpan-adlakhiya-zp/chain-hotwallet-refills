@@ -1,6 +1,5 @@
 const logger = require('../../middleware/logger')('fireblocksWallet');
 const FireblocksSDK = require("fireblocks-sdk").FireblocksSDK;
-const { PeerType, TransactionStatus, FeeLevel } = require("fireblocks-sdk");
 
 class WalletFactory {
   constructor() {

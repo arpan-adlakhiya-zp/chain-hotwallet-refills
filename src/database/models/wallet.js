@@ -13,7 +13,6 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       // define association here
       Wallet.belongsTo(models.Blockchain, { foreignKey: 'blockchain_id' });
-      Wallet.hasMany(models.Balance, { foreignKey: 'wallet_id' });
     }
   };
 

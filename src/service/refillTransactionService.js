@@ -1,5 +1,4 @@
 const logger = require('../middleware/logger')('refillTransactionService');
-const refillTransactionHelper = require('../database/helpers/refillTransaction');
 const databaseService = require('./chainDb');
 const providerService = require('./providerService');
 
@@ -18,21 +17,21 @@ class RefillTransactionService {
       logger.info(`Creating refill transaction for request: ${transactionData.refillRequestId}`);
 
       // Check if transaction already exists (idempotency)
-      const existingTransaction = await refillTransactionHelper.getRefillTransactionByRequestId(transactionData.refillRequestId);
+      const existingTransaction = await databaseService.getRefillTransactionByRequestId(transactionData.refillRequestId);
       if (existingTransaction) {
         logger.debug(`Refill transaction already exists for request: ${transactionData.refillRequestId}`);
         return {
           success: false,
-          error: null,
+          error: `Refill transaction already exists for request: ${transactionData.refillRequestId}`,
           code: 'TRANSACTION_EXISTS',
           data: {
-            transaction: existingTransaction.data,
+            transaction: existingTransaction,
             message: 'Transaction already exists'
           }
         };
       }
 
-      const transaction = await refillTransactionHelper.createRefillTransaction(transactionData);
+      const transaction = await databaseService.createRefillTransaction(transactionData);
 
       logger.info(`Refill transaction created with ID: ${transaction.id}`);
       
@@ -67,7 +66,7 @@ class RefillTransactionService {
     try {
       logger.info(`Updating refill transaction for request: ${refillRequestId}`);
 
-      const [updatedRowsCount] = await refillTransactionHelper.updateRefillTransaction(refillRequestId, updateData);
+      const [updatedRowsCount] = await databaseService.updateRefillTransaction(refillRequestId, updateData);
 
       if (updatedRowsCount === 0) {
         return {
@@ -106,7 +105,7 @@ class RefillTransactionService {
    */
   async getRefillTransactionByRequestId(refillRequestId) {
     try {
-      const transaction = await refillTransactionHelper.getRefillTransactionByRequestId(refillRequestId);
+      const transaction = await databaseService.getRefillTransactionByRequestId(refillRequestId);
 
       if (!transaction) {
         return {
@@ -133,79 +132,6 @@ class RefillTransactionService {
         success: false,
         error: 'Failed to get refill transaction',
         code: 'TRANSACTION_GET_ERROR',
-        data: {
-          details: error.message
-        }
-      };
-    }
-  }
-
-  /**
-   * Get refill transaction by provider transaction ID
-   * @param {string} providerTxId - Provider transaction ID
-   * @returns {Object} Standardized response
-   */
-  async getRefillTransactionByProviderTxId(providerTxId) {
-    try {
-      const transaction = await refillTransactionHelper.getRefillTransactionByProviderTxId(providerTxId);
-
-      if (!transaction) {
-        return {
-          success: false,
-          error: 'Refill transaction not found',
-          code: 'TRANSACTION_NOT_FOUND',
-          data: {
-            providerTxId
-          }
-        };
-      }
-
-      return {
-        success: true,
-        error: null,
-        code: null,
-        data: {
-          transaction: transaction
-        }
-      };
-    } catch (error) {
-      logger.error(`Error getting refill transaction by provider ID: ${error.message}`);
-      return {
-        success: false,
-        error: 'Failed to get refill transaction',
-        code: 'TRANSACTION_GET_ERROR',
-        data: {
-          details: error.message
-        }
-      };
-    }
-  }
-
-  /**
-   * Get refill transactions by status
-   * @param {string} status - Transaction status
-   * @param {number} limit - Number of records to return
-   * @returns {Object} Standardized response
-   */
-  async getRefillTransactionsByStatus(status, limit = 100) {
-    try {
-      const transactions = await refillTransactionHelper.getRefillTransactionsByStatus(status, limit);
-
-      return {
-        success: true,
-        error: null,
-        code: null,
-        data: {
-          transactions: transactions,
-          count: transactions.length
-        }
-      };
-    } catch (error) {
-      logger.error(`Error getting refill transactions by status: ${error.message}`);
-      return {
-        success: false,
-        error: 'Failed to get refill transactions',
-        code: 'TRANSACTIONS_GET_ERROR',
         data: {
           details: error.message
         }
@@ -341,8 +267,18 @@ class RefillTransactionService {
         if (providerName.toLowerCase() === 'fireblocks') {
           providerStatusResponse = await provider.getTransactionById(providerTxId);
         } else if (providerName.toLowerCase() === 'liminal') {
-          // Get asset and wallet info for constructing token object (needed for Liminal)
-          const asset = await databaseService.getAssetDetails(transaction.assetId);
+          // Get asset info from transaction association (already loaded with transaction)
+          const asset = transaction.Asset;
+          
+          if (!asset) {
+            logger.error(`Asset not found in transaction association for transaction: ${refillRequestId}`);
+            return {
+              success: false,
+              error: 'Asset data not available for status check',
+              code: 'ASSET_NOT_FOUND',
+              data: { refillRequestId }
+            };
+          }
 
           // Construct token object for provider API calls
           const tokenInfo = {

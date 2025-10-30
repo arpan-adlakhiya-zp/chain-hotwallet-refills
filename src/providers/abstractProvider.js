@@ -38,31 +38,17 @@ class AbstractProvider {
    * @returns {Promise<string>} Balance in atomic units
    */
   async getTokenBalance(token) {
-    return;
-  }
-
-
-  /**
-   * Get transaction status
-   * @param {string} batchId - Transaction batch ID
-   * @param {Object} token - Token configuration object
-   * @returns {Promise<Object>} Transaction status
-   */
-  async getTransactionStatus(batchId, token) {
-    return;
+    throw new Error('getTokenBalance() method must be implemented by provider');
   }
 
   /**
-   * Complete transaction flow: create, sign, and submit
-   * @param {Array} txns - Array of transaction objects
-   * @param {Object} token - Token configuration object
-   * @param {string} batchId - Optional batch ID
-   * @returns {Promise<Object>} Complete transaction result
+   * Create a transfer request from cold wallet to hot wallet
+   * @param {Object} transferData - Transfer configuration
+   * @returns {Promise<Object>} Transfer request result
    */
-  async createSignAndSubmit(txns, token, batchId = null) {
-    return;
+  async createTransferRequest(transferData) {
+    throw new Error('createTransferRequest() method must be implemented by provider');
   }
-
 
   /**
    * Validate provider credentials and configuration

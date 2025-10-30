@@ -84,15 +84,6 @@ class ProviderService {
   }
 
   /**
-   * Get a specific provider by name
-   * @param {string} providerName - Name of the provider
-   * @returns {Object|null} Provider instance or null
-   */
-  getProvider(providerName) {
-    return this.providers.get(providerName.toLowerCase());
-  }
-
-  /**
    * Get token provider for a specific blockchain and asset
    * @param {string} chainName - Blockchain name
    * @param {string} assetSymbol - Asset symbol

@@ -3,12 +3,12 @@ const logger = require('./src/middleware/logger')('index');
 const ExpressServer = require('./src/middleware/expressServer');
 const onTerminate = require('./src/utils/terminate');
 const pjson = require('./package.json');
-const databaseInitializer = require('./src/database/init');
+const databaseService = require('./src/service/chainDb');
 
 let expressServer = null;
 
 async function shutDown() {
-  await databaseInitializer.close();
+  await databaseService.disconnect();
   if (expressServer) {
     logger.info("Closing server");
     await expressServer.close();
@@ -29,7 +29,7 @@ const launchServer = async () => {
     logStartupMsg();
 
     // Initialize database
-    await databaseInitializer.initialize();
+    await databaseService.connect();
     logger.info('Database initialized successfully');
 
     //create the express server

@@ -3,7 +3,8 @@ const db = require('../database/models');
 const blockchainHelper = require('../database/helpers/blockchain');
 const walletHelper = require('../database/helpers/wallet');
 const assetHelper = require('../database/helpers/asset');
-const balanceHelper = require('../database/helpers/balance');
+const refillTransactionHelper = require('../database/helpers/refillTransaction');
+// Removed balanceHelper - balances are fetched on-chain via providers, not stored in DB
 // Removed refillRequestHelper and alertHelper - these tables are managed by external system
 
 class DatabaseService {
@@ -12,9 +13,13 @@ class DatabaseService {
     this.isConnected = false;
   }
 
+  /**
+   * Connect to database and authenticate
+   */
   async connect() {
     try {
       if (!this.isConnected) {
+        logger.info('Initializing database connection...');
         await this.sequelize.authenticate();
         this.isConnected = true;
         logger.info('Database connection established successfully');
@@ -25,6 +30,9 @@ class DatabaseService {
     }
   }
 
+  /**
+   * Disconnect from database
+   */
   async disconnect() {
     try {
       if (this.isConnected) {
@@ -39,16 +47,6 @@ class DatabaseService {
   }
 
   // Blockchain methods
-  async getBlockchainDetails(blockchainId) {
-    try {
-      await this.connect();
-      return await blockchainHelper.getBlockchainById(blockchainId);
-    } catch (error) {
-      logger.error(`Error fetching blockchain details: ${error.message}`);
-      throw error;
-    }
-  }
-
   async getBlockchainByName(blockchainName) {
     try {
       await this.connect();
@@ -60,42 +58,12 @@ class DatabaseService {
   }
 
   // Wallet methods
-  async getWalletDetails(walletId) {
-    try {
-      await this.connect();
-      return await walletHelper.getWalletById(walletId);
-    } catch (error) {
-      logger.error(`Error fetching wallet details: ${error.message}`);
-      throw error;
-    }
-  }
-
   async getWalletByAddress(address) {
     try {
       await this.connect();
       return await walletHelper.getWalletByAddress(address);
     } catch (error) {
       logger.error(`Error fetching wallet by address: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async getHotWalletsByBlockchain(blockchainId) {
-    try {
-      await this.connect();
-      return await walletHelper.getHotWalletsByBlockchain(blockchainId);
-    } catch (error) {
-      logger.error(`Error fetching hot wallets: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async getColdWalletsByBlockchain(blockchainId) {
-    try {
-      await this.connect();
-      return await walletHelper.getColdWalletsByBlockchain(blockchainId);
-    } catch (error) {
-      logger.error(`Error fetching cold wallets: ${error.message}`);
       throw error;
     }
   }
@@ -111,16 +79,6 @@ class DatabaseService {
     }
   }
 
-  async getAssetBySymbol(symbol) {
-    try {
-      await this.connect();
-      return await assetHelper.getAssetBySymbol(symbol);
-    } catch (error) {
-      logger.error(`Error fetching asset by symbol: ${error.message}`);
-      throw error;
-    }
-  }
-
   async getAssetBySymbolAndBlockchain(symbol, blockchainId) {
     try {
       await this.connect();
@@ -131,101 +89,36 @@ class DatabaseService {
     }
   }
 
-  async getAssetsByBlockchain(blockchainId) {
+  // Refill Transaction methods
+  async createRefillTransaction(transactionData) {
     try {
       await this.connect();
-      return await assetHelper.getAssetsByBlockchain(blockchainId);
+      return await refillTransactionHelper.createRefillTransaction(transactionData);
     } catch (error) {
-      logger.error(`Error fetching assets by blockchain: ${error.message}`);
+      logger.error(`Error creating refill transaction: ${error.message}`);
       throw error;
     }
   }
 
-  // Balance methods
-  async getWalletBalance(walletId, assetId) {
+  async updateRefillTransaction(refillRequestId, updateData) {
     try {
       await this.connect();
-      return await balanceHelper.getBalanceByWalletAndAsset(walletId, assetId);
+      return await refillTransactionHelper.updateRefillTransaction(refillRequestId, updateData);
     } catch (error) {
-      logger.error(`Error fetching wallet balance: ${error.message}`);
+      logger.error(`Error updating refill transaction: ${error.message}`);
       throw error;
     }
   }
 
-  async getColdWalletBalance(coldWalletId, assetId) {
+  async getRefillTransactionByRequestId(refillRequestId) {
     try {
       await this.connect();
-      return await balanceHelper.getBalanceByWalletAndAsset(coldWalletId, assetId);
+      return await refillTransactionHelper.getRefillTransactionByRequestId(refillRequestId);
     } catch (error) {
-      logger.error(`Error fetching cold wallet balance: ${error.message}`);
+      logger.error(`Error getting refill transaction: ${error.message}`);
       throw error;
     }
   }
-
-  async getBalancesByWallet(walletId) {
-    try {
-      await this.connect();
-      return await balanceHelper.getBalancesByWallet(walletId);
-    } catch (error) {
-      logger.error(`Error fetching balances by wallet: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async getLowBalanceWallets(assetId, threshold) {
-    try {
-      await this.connect();
-      return await balanceHelper.getLowBalanceWallets(assetId, threshold);
-    } catch (error) {
-      logger.error(`Error fetching low balance wallets: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async createOrUpdateBalance(balanceData) {
-    try {
-      await this.connect();
-      return await balanceHelper.createOrUpdateBalance(balanceData);
-    } catch (error) {
-      logger.error(`Error creating/updating balance: ${error.message}`);
-      throw error;
-    }
-  }
-
-  // Refill Request methods - REMOVED: These tables are managed by external system
-
-  // Cold wallet lookup method
-  async getColdWalletForAsset(assetId, blockchainId) {
-    try {
-      await this.connect();
-
-      // First get the asset to find the refill_sweep_wallet
-      const asset = await assetHelper.getAssetById(assetId);
-
-      if (!asset || !asset.refillSweepWallet) {
-        return null;
-      }
-
-      const sweepWalletAddress = asset.refillSweepWallet;
-
-      // Now find the wallet with this address
-      const coldWallet = await walletHelper.getWalletByAddress(sweepWalletAddress);
-
-      if (coldWallet &&
-        coldWallet.blockchainId === blockchainId &&
-        coldWallet.walletType === 'cold' &&
-        coldWallet.monitorStatus === 'active') {
-        return coldWallet;
-      }
-
-      return null;
-    } catch (error) {
-      logger.error(`Error fetching cold wallet for asset: ${error.message}`);
-      throw error;
-    }
-  }
-
-  // Alert methods - REMOVED: These tables are managed by external system
 
   // Health check method
   async healthCheck() {

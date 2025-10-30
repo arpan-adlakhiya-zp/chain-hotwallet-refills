@@ -57,7 +57,7 @@ class RefillValidationService {
       }
 
       // Determine the correct hot wallet address based on token type
-      const hotWalletAddress = await this.determineHotWalletAddress(refillData, assetValidation.asset);
+      const hotWalletAddress = this.determineHotWalletAddress(refillData, assetValidation.data.asset);
 
       // Validate refill_sweep_wallet matches the asset's configured sweep wallet
       const sweepWalletValidation = await this.validateRefillSweepWallet(
@@ -191,7 +191,7 @@ class RefillValidationService {
    * @param {Object} asset - The asset data.
    * @returns {string} The correct hot wallet address.
    */
-  async determineHotWalletAddress(refillData, asset) {
+  determineHotWalletAddress(refillData, asset) {
     // - For native tokens: use the wallet_address from refillData
     // - For contract tokens: use the wallet_id associated with the asset in the assets table
     if (refillData.asset_address === "native") {

@@ -9,10 +9,8 @@ module.exports = (sequelize) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // Define associations here if needed
-      // RefillTransaction.belongsTo(models.Wallet, { foreignKey: 'wallet_id' });
-      // RefillTransaction.belongsTo(models.Asset, { foreignKey: 'asset_id' });
-      // RefillTransaction.belongsTo(models.Blockchain, { foreignKey: 'blockchain_id' });
+      // Define associations - assetId provides access to wallet and blockchain
+      RefillTransaction.belongsTo(models.Asset, { foreignKey: 'asset_id', as: 'Asset' });
     }
   }
 
@@ -51,6 +49,18 @@ module.exports = (sequelize) => {
       allowNull: false,
       defaultValue: 'PENDING',
       comment: 'Transaction status: PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED'
+    },
+    
+    // Foreign key to asset (provides access to wallet, blockchain, and all asset details)
+    assetId: {
+      field: 'asset_id',
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'assets',
+        key: 'id'
+      },
+      comment: 'Foreign key to assets table - provides complete asset context'
     },
     
     // Transaction details

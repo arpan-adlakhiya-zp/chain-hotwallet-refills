@@ -6,7 +6,7 @@ exports.sendErrorResponse = function (res, err) {
     if (typeof respMsg.code !== 'number') {
       respMsg.code = 500;
     }
-    if (respMsg.code < 400 || respMsg > 599) {
+    if (respMsg.code < 400 || respMsg.code > 599) {
       respMsg.code = 500;
     }
     respMsg.message = _.get(err, 'message', 'Unkown error');

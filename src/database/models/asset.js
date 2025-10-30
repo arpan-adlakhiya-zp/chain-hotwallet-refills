@@ -14,7 +14,6 @@ module.exports = (sequelize, DataTypes) => {
       // define association here
       Asset.belongsTo(models.Blockchain, { foreignKey: 'blockchain_id' });
       Asset.belongsTo(models.Wallet, { foreignKey: 'wallet_id' });
-      Asset.hasMany(models.Balance, { foreignKey: 'asset_id' });
     }
   };
 

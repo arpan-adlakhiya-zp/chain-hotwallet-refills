@@ -6,20 +6,8 @@ const db = require('../models');
  * @returns {Promise<Object>} Created transaction
  */
 function createRefillTransaction(transactionData) {
-  return db.RefillTransaction.create({
-    refillRequestId: transactionData.refillRequestId,
-    walletId: transactionData.walletId,
-    assetId: transactionData.assetId,
-    blockchainId: transactionData.blockchainId,
-    fromAddress: transactionData.fromAddress,
-    toAddress: transactionData.toAddress,
-    amountAtomic: transactionData.amountAtomic,
-    provider: transactionData.provider,
-    status: transactionData.status || 'PENDING',
-    tokenSymbol: transactionData.tokenSymbol,
-    walletDetails: transactionData.walletDetails || null,
-    message: transactionData.message || null
-  });
+  // Pass data directly to Sequelize - it will handle undefined fields gracefully
+  return db.RefillTransaction.create(transactionData);
 }
 
 /**
@@ -41,39 +29,20 @@ function updateRefillTransaction(refillRequestId, updateData) {
  */
 function getRefillTransactionByRequestId(refillRequestId) {
   return db.RefillTransaction.findOne({
-    where: { refillRequestId: refillRequestId }
-  });
-}
-
-/**
- * Get refill transaction by provider transaction ID
- * @param {string} providerTxId - Provider transaction ID
- * @returns {Promise<Object|null>} Transaction or null
- */
-function getRefillTransactionByProviderTxId(providerTxId) {
-  return db.RefillTransaction.findOne({
-    where: { providerTxId: providerTxId }
-  });
-}
-
-/**
- * Get refill transactions by status
- * @param {string} status - Transaction status
- * @param {number} limit - Number of records to return
- * @returns {Promise<Array>} Array of transactions
- */
-function getRefillTransactionsByStatus(status, limit = 100) {
-  return db.RefillTransaction.findAll({
-    where: { status: status },
-    limit: limit,
-    order: [['createdAt', 'DESC']]
+    where: { refillRequestId: refillRequestId },
+    include: [{
+      model: db.Asset,
+      as: 'Asset',
+      include: [
+        { model: db.Blockchain, as: 'Blockchain' },
+        { model: db.Wallet, as: 'Wallet' }
+      ]
+    }]
   });
 }
 
 module.exports = {
   createRefillTransaction,
   updateRefillTransaction,
-  getRefillTransactionByRequestId,
-  getRefillTransactionByProviderTxId,
-  getRefillTransactionsByStatus
+  getRefillTransactionByRequestId
 };

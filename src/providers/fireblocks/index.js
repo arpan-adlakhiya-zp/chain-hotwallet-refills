@@ -42,7 +42,7 @@ class FireblocksProvider extends AbstractProvider {
       await this.walletFactory.init(
         this.secret.privateKey,
         this.secret.apiKey,
-        this.config.baseUrl || 'https://api.fireblocks.io'
+        this.config.apiBaseUrl || 'https://api.fireblocks.io'
       );
 
       // Initialize transaction handler

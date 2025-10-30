@@ -10,6 +10,6 @@ router.get('/v1/health', doHealthCheckController);
 router.post('/v1/wallet/refill', processRefillRequestController);
 
 // Transaction status check endpoint
-router.get('/v1/transaction/status/:refill_request_id', checkTransactionStatusController);
+router.get('/v1/wallet/refill/status/:refill_request_id', checkTransactionStatusController);
 
 module.exports = { router };

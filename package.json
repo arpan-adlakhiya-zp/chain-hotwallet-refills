@@ -20,19 +20,14 @@
   "dependencies": {
     "@lmnl/liminaljs": "^1.0.0",
     "@zebpay/colt": "^1.2.0",
-    "axios": "^1.7.9",
     "bignumber.js": "^9.1.2",
-    "body-parser": "^1.20.2",
-    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "fireblocks-sdk": "^1.0.0",
-    "http-status-codes": "^2.3.0",
     "lodash": "^4.17.21",
     "pg": "^8.11.5",
     "rc": "^1.2.8",
-    "sequelize": "^6.6.5",
-    "winston": "^3.18.3"
+    "sequelize": "^6.6.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.0",

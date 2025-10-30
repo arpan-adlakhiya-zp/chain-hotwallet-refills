@@ -1,6 +1,5 @@
 const logger = require('../../middleware/logger')('fireblocksTransaction');
-const FireblocksSDK = require("fireblocks-sdk").FireblocksSDK;
-const { PeerType, TransactionStatus, FeeLevel } = require("fireblocks-sdk");
+const { FeeLevel } = require("fireblocks-sdk");
 
 /**
  * Fireblocks Transaction class for handling transaction operations

@@ -99,7 +99,8 @@ class RefillService {
         provider: providerName,
         status: 'PENDING',
         amountAtomic: validatedData.refillAmountAtomic,
-        tokenSymbol: validatedData.asset.symbol
+        tokenSymbol: validatedData.asset.symbol,
+        assetId: validatedData.asset.id  // Asset has FK to wallet and blockchain
       };
 
       const createTransactionResult = await refillTransactionService.createRefillTransaction(transactionData);
@@ -157,7 +158,7 @@ class RefillService {
           refillAmount: refillData.refill_amount,
           status: txnStatus,
           provider: providerName,
-          transaction: transactionResult.data.transaction
+          transferRequest: transactionResult.data.transferRequest
         }
       };
 
@@ -235,48 +236,6 @@ class RefillService {
       };
     }
   }
-
-  /**
-   * Get the status of a refill request
-   * @param {string} refillRequestId - The ID of the refill request
-   * @param {Object} provider - The provider instance
-   * @param {Object} token - The token data
-   * @returns {Promise<Object>} The refill status result object.
-   *   - success {boolean}: true if the refill status is retrieved successfully, false otherwise.
-   *   - error {string}: the error message if the refill status is not retrieved successfully.
-   *   - code {string}: the error code if the refill status is not retrieved successfully.
-   *   - data {Object}: the data if the refill status is retrieved successfully.
-   */
-  async getRefillStatus(refillRequestId, provider, token) {
-    try {
-      logger.info(`Getting refill status for request ID: ${refillRequestId}`);
-
-      const statusResult = await provider.getTransactionStatus(refillRequestId, token);
-      
-      return {
-        success: true,
-        error: null,
-        code: null,
-        data: {
-          refillRequestId,
-          status: statusResult.status || 'pending',
-          message: `Transaction status: ${statusResult.status}`,
-          transactionStatus: statusResult
-        }
-      };
-    } catch (error) {
-      logger.error(`Error getting refill status: ${error.message}`);
-      return {
-        success: false,
-        error: 'Failed to get refill status',
-        code: 'STATUS_CHECK_ERROR',
-        data: {
-          details: error.message
-        }
-      };
-    }
-  }
-
 
 }
 

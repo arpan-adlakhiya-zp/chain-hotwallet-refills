@@ -1,7 +1,4 @@
 const logger = require("../../middleware/logger")("refillUtils");
-const databaseService = require("../chainDb");
-const LiminalProvider = require("../../providers/liminal");
-const FireblocksProvider = require("../../providers/fireblocks");
 const config = require("../../config");
 
 class RefillUtils {
