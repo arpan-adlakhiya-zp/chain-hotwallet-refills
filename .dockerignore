@@ -1,2 +1,30 @@
+# Git
+.git
 .gitignore
-README.md
+
+# Documentation
+*.md
+
+# Testing
+coverage
+src/__tests__
+src/tests
+jest.config.js
+
+# Logs
+logs
+*.log
+
+# Environment
+.env*
+.npmrc
+.*rc
+!.sequelizerc
+
+# IDE
+.vscode
+.idea
+
+# Dependencies (will be installed in container)
+node_modules
+package-lock.json
