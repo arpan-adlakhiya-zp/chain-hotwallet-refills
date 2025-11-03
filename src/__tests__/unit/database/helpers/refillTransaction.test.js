@@ -119,5 +119,65 @@ describe('RefillTransaction Helper', () => {
       expect(callArgs.include[0].include).toHaveLength(2);
     });
   });
+
+  describe('getPendingTransactionByAssetId', () => {
+    it('should fetch pending transaction for asset', async () => {
+      const mockTransaction = {
+        id: 123,
+        refillRequestId: 'REQ001',
+        assetId: 1,
+        status: 'PENDING'
+      };
+
+      db.RefillTransaction.findOne = jest.fn().mockResolvedValue(mockTransaction);
+
+      const result = await refillTransactionHelper.getPendingTransactionByAssetId(1);
+
+      expect(db.RefillTransaction.findOne).toHaveBeenCalledWith({
+        where: { 
+          assetId: 1,
+          status: {
+            [db.Sequelize.Op.in]: ['PENDING', 'PROCESSING']
+          }
+        },
+        order: [['createdAt', 'DESC']]
+      });
+      expect(result).toEqual(mockTransaction);
+    });
+
+    it('should fetch processing transaction for asset', async () => {
+      const mockTransaction = {
+        id: 124,
+        refillRequestId: 'REQ002',
+        assetId: 2,
+        status: 'PROCESSING'
+      };
+
+      db.RefillTransaction.findOne = jest.fn().mockResolvedValue(mockTransaction);
+
+      const result = await refillTransactionHelper.getPendingTransactionByAssetId(2);
+
+      expect(result).toEqual(mockTransaction);
+      expect(result.status).toBe('PROCESSING');
+    });
+
+    it('should return null when no pending transactions exist', async () => {
+      db.RefillTransaction.findOne = jest.fn().mockResolvedValue(null);
+
+      const result = await refillTransactionHelper.getPendingTransactionByAssetId(1);
+
+      expect(result).toBeNull();
+    });
+
+    it('should not return completed transactions', async () => {
+      db.RefillTransaction.findOne = jest.fn().mockResolvedValue(null);
+
+      await refillTransactionHelper.getPendingTransactionByAssetId(1);
+
+      const callArgs = db.RefillTransaction.findOne.mock.calls[0][0];
+      expect(callArgs.where.status[db.Sequelize.Op.in]).not.toContain('COMPLETED');
+      expect(callArgs.where.status[db.Sequelize.Op.in]).not.toContain('FAILED');
+    });
+  });
 });
 

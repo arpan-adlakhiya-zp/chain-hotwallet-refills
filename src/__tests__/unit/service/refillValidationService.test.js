@@ -357,5 +357,63 @@ describe('RefillValidationService', () => {
       expect(result.code).toBe('ABOVE_TRIGGER_THRESHOLD');
     });
   });
+
+  describe('validateNoPendingRefill', () => {
+    it('should pass when no pending refill exists for asset', async () => {
+      databaseService.getPendingTransactionByAssetId.mockResolvedValue(null);
+
+      const result = await refillValidationService.validateNoPendingRefill(1);
+
+      expect(result.success).toBe(true);
+      expect(databaseService.getPendingTransactionByAssetId).toHaveBeenCalledWith(1);
+    });
+
+    it('should fail when asset has pending refill', async () => {
+      const pendingTx = {
+        refillRequestId: 'REQ_PENDING',
+        status: 'PENDING',
+        providerTxId: 'fb-123',
+        createdAt: '2025-10-31T10:00:00Z'
+      };
+
+      databaseService.getPendingTransactionByAssetId.mockResolvedValue(pendingTx);
+
+      const result = await refillValidationService.validateNoPendingRefill(1);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('REFILL_IN_PROGRESS');
+      expect(result.data.existingRefillRequestId).toBe('REQ_PENDING');
+      expect(result.data.existingStatus).toBe('PENDING');
+    });
+
+    it('should fail when asset has processing refill', async () => {
+      const processingTx = {
+        refillRequestId: 'REQ_PROCESSING',
+        status: 'PROCESSING',
+        providerTxId: 'fb-456',
+        createdAt: '2025-10-31T10:30:00Z'
+      };
+
+      databaseService.getPendingTransactionByAssetId.mockResolvedValue(processingTx);
+
+      const result = await refillValidationService.validateNoPendingRefill(1);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('REFILL_IN_PROGRESS');
+      expect(result.data.existingStatus).toBe('PROCESSING');
+    });
+
+    it('should handle database errors gracefully', async () => {
+      databaseService.getPendingTransactionByAssetId.mockRejectedValue(
+        new Error('Database connection failed')
+      );
+
+      const result = await refillValidationService.validateNoPendingRefill(1);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('PENDING_REFILL_CHECK_ERROR');
+      expect(result.data.details).toContain('Database connection failed');
+    });
+  });
 });
 

@@ -41,8 +41,26 @@ function getRefillTransactionByRequestId(refillRequestId) {
   });
 }
 
+/**
+ * Get pending/processing refill transaction by asset ID
+ * @param {number} assetId - Asset ID
+ * @returns {Promise<Object|null>} Transaction or null
+ */
+function getPendingTransactionByAssetId(assetId) {
+  return db.RefillTransaction.findOne({
+    where: { 
+      assetId: assetId,
+      status: {
+        [db.Sequelize.Op.in]: ['PENDING', 'PROCESSING']
+      }
+    },
+    order: [['createdAt', 'DESC']]
+  });
+}
+
 module.exports = {
   createRefillTransaction,
   updateRefillTransaction,
-  getRefillTransactionByRequestId
+  getRefillTransactionByRequestId,
+  getPendingTransactionByAssetId
 };

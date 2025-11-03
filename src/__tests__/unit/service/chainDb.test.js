@@ -201,5 +201,26 @@ describe('DatabaseService (chainDb)', () => {
       expect(result).toEqual(mockTransaction);
     });
   });
+
+  describe('getPendingTransactionByAssetId', () => {
+    it('should connect and call transaction helper', async () => {
+      const mockTransaction = { id: 123, assetId: 1, status: 'PENDING' };
+      refillTransactionHelper.getPendingTransactionByAssetId.mockResolvedValue(mockTransaction);
+
+      const result = await databaseService.getPendingTransactionByAssetId(1);
+
+      expect(mockSequelize.authenticate).toHaveBeenCalled();
+      expect(refillTransactionHelper.getPendingTransactionByAssetId).toHaveBeenCalledWith(1);
+      expect(result).toEqual(mockTransaction);
+    });
+
+    it('should return null when no pending transaction exists', async () => {
+      refillTransactionHelper.getPendingTransactionByAssetId.mockResolvedValue(null);
+
+      const result = await databaseService.getPendingTransactionByAssetId(1);
+
+      expect(result).toBeNull();
+    });
+  });
 });
 

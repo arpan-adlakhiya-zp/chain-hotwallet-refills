@@ -232,6 +232,70 @@ describe('Refill Flow Integration Tests', () => {
     });
   });
 
+  describe('POST /v1/wallet/refill - Asset Locking', () => {
+    it('should return 409 when asset already has refill in progress', async () => {
+      const refillRequest = {
+        refill_request_id: 'REQ_NEW',
+        wallet_address: '0xhot',
+        asset_symbol: 'BTC',
+        asset_address: 'native',
+        chain_name: 'Bitcoin',
+        refill_amount: '1.0',
+        refill_sweep_wallet: '0xcold'
+      };
+
+      refillService.processRefillRequestService.mockResolvedValue({
+        success: false,
+        error: 'A refill for this asset is already in progress. Please wait for it to complete.',
+        code: 'REFILL_IN_PROGRESS',
+        data: {
+          existingRefillRequestId: 'REQ_OLD',
+          existingStatus: 'PROCESSING',
+          existingProviderTxId: 'fb-tx-old',
+          createdAt: '2025-10-31T10:00:00Z'
+        }
+      });
+
+      const response = await request(app)
+        .post('/v1/wallet/refill')
+        .send(refillRequest);
+
+      expect(response.status).toBe(409);
+      expect(response.body.success).toBe(false);
+      expect(response.body.code).toBe('REFILL_IN_PROGRESS');
+      expect(response.body.data.existingRefillRequestId).toBe('REQ_OLD');
+    });
+
+    it('should allow refill for different asset even if another is pending', async () => {
+      // This test ensures BTC refill doesn't block ETH refill
+      const refillRequest = {
+        refill_request_id: 'REQ_ETH',
+        wallet_address: '0xhot',
+        asset_symbol: 'ETH',
+        asset_address: 'native',
+        chain_name: 'Ethereum',
+        refill_amount: '10.0',
+        refill_sweep_wallet: '0xcold'
+      };
+
+      refillService.processRefillRequestService.mockResolvedValue({
+        success: true,
+        data: {
+          refillRequestId: 'REQ_ETH',
+          transactionId: 'fb-tx-eth',
+          status: 'PROCESSING'
+        }
+      });
+
+      const response = await request(app)
+        .post('/v1/wallet/refill')
+        .send(refillRequest);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+    });
+  });
+
   describe('GET /v1/wallet/refill/status/:refill_request_id', () => {
     it('should return transaction status for completed transaction', async () => {
       refillTransactionService.checkTransactionStatus.mockResolvedValue({

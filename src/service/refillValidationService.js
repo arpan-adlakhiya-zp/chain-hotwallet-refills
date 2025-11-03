@@ -56,6 +56,12 @@ class RefillValidationService {
         return assetValidation;
       }
 
+      // Check if asset already has a pending refill (prevent duplicate in-flight refills)
+      const pendingRefillCheck = await this.validateNoPendingRefill(assetValidation.data.asset.id);
+      if (!pendingRefillCheck.success) {
+        return pendingRefillCheck;
+      }
+
       // Determine the correct hot wallet address based on token type
       const hotWalletAddress = this.determineHotWalletAddress(refillData, assetValidation.data.asset);
 
@@ -203,6 +209,48 @@ class RefillValidationService {
       } else {
         throw new Error('Contract token asset must have an associated wallet');
       }
+    }
+  }
+
+  /**
+   * Check if asset already has a pending or processing refill
+   * @param {number} assetId - Asset ID
+   * @returns {Object} Validation result
+   */
+  async validateNoPendingRefill(assetId) {
+    try {
+      const pendingTx = await databaseService.getPendingTransactionByAssetId(assetId);
+      
+      if (pendingTx) {
+        return {
+          success: false,
+          error: 'A refill for this asset is already in progress. Please wait for it to complete.',
+          code: 'REFILL_IN_PROGRESS',
+          data: {
+            existingRefillRequestId: pendingTx.refillRequestId,
+            existingStatus: pendingTx.status,
+            existingProviderTxId: pendingTx.providerTxId,
+            createdAt: pendingTx.createdAt
+          }
+        };
+      }
+      
+      return {
+        success: true,
+        error: null,
+        code: null,
+        data: null
+      };
+    } catch (error) {
+      logger.error(`Error checking pending refills: ${error.message}`);
+      return {
+        success: false,
+        error: 'Error checking for pending refills',
+        code: 'PENDING_REFILL_CHECK_ERROR',
+        data: {
+          details: error.message
+        }
+      };
     }
   }
 

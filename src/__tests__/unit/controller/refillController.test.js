@@ -93,6 +93,30 @@ describe('RefillController', () => {
 
       expect(refillService.processRefillRequestService).toHaveBeenCalledWith(mockReq.body);
     });
+
+    it('should return 409 when refill already in progress for asset', async () => {
+      mockReq.body = {
+        wallet_address: '0x123',
+        asset_symbol: 'BTC'
+      };
+
+      const mockResult = {
+        success: false,
+        error: 'A refill for this asset is already in progress',
+        code: 'REFILL_IN_PROGRESS',
+        data: {
+          existingRefillRequestId: 'REQ_OLD',
+          existingStatus: 'PROCESSING'
+        }
+      };
+
+      refillService.processRefillRequestService.mockResolvedValue(mockResult);
+
+      await processRefillRequestController(mockReq, mockRes, mockNext);
+
+      expect(mockRes.status).toHaveBeenCalledWith(409);
+      expect(mockRes.json).toHaveBeenCalledWith(mockResult);
+    });
   });
 
   describe('checkTransactionStatusController', () => {

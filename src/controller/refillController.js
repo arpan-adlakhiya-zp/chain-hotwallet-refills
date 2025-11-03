@@ -11,7 +11,12 @@ async function processRefillRequestController(req, res, next) {
     if (result.success) {
       res.status(200).json(result);
     } else {
-      res.status(400).json(result);
+      // Return 409 Conflict for in-progress refills
+      if (result.code === 'REFILL_IN_PROGRESS') {
+        res.status(409).json(result);
+      } else {
+        res.status(400).json(result);
+      }
     }
   } catch (e) {
     logger.error(`Error processing refill request: ${e.message}`);

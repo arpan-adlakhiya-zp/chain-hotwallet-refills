@@ -120,6 +120,16 @@ class DatabaseService {
     }
   }
 
+  async getPendingTransactionByAssetId(assetId) {
+    try {
+      await this.connect();
+      return await refillTransactionHelper.getPendingTransactionByAssetId(assetId);
+    } catch (error) {
+      logger.error(`Error getting pending transaction by asset: ${error.message}`);
+      throw error;
+    }
+  }
+
   // Health check method
   async healthCheck() {
     try {
