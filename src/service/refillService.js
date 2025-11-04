@@ -54,6 +54,8 @@ class RefillService {
       const refillRequestId = refillData.refill_request_id;
       logger.info(`Processing refill request for wallet: ${refillData.wallet_address}, request ID: ${refillRequestId}`);
 
+      logger.debug(`Refill data: ${JSON.stringify(refillData, null, 2)}`);
+
       // Get the provider for this token
       const provider = await providerService.getTokenProvider(
         refillData.chain_name,
@@ -80,7 +82,7 @@ class RefillService {
       refillData.provider = provider; // Pass provider to validation
       const validationResult = await refillValidationService.validateRefillRequest(refillData);
       if (!validationResult.success) {
-        logger.error(`Refill request validation failed: ${validationResult.error}`);
+        logger.error(`Refill request validation failed: ${validationResult.error}, result: ${JSON.stringify(validationResult, null, 2)}`);
         return {
           success: false,
           error: validationResult.error,
@@ -99,8 +101,11 @@ class RefillService {
         provider: providerName,
         status: 'PENDING',
         amountAtomic: validatedData.refillAmountAtomic,
+        amount: refillData.refill_amount,  // Human-readable amount
         tokenSymbol: validatedData.asset.symbol,
-        assetId: validatedData.asset.id  // Asset has FK to wallet and blockchain
+        chainName: validatedData.blockchain.name,  // Blockchain name
+        assetId: validatedData.asset.id,  // Asset has FK to wallet and blockchain
+        providerStatus: null  // Will be set when provider responds
       };
 
       const createTransactionResult = await refillTransactionService.createRefillTransaction(transactionData);

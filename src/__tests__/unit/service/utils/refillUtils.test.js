@@ -221,5 +221,160 @@ describe('RefillUtils', () => {
       expect(result.code).toBe('UNSUPPORTED_PROVIDER');
     });
   });
+
+  describe('buildTransactionUpdateData', () => {
+    it('should return empty update when nothing changed', () => {
+      const transaction = {
+        status: 'PROCESSING',
+        providerStatus: 'SUBMITTED',
+        txHash: '0xabc',
+        message: 'Processing'
+      };
+
+      const transactionDetails = {
+        status: 'SUBMITTED',
+        txHash: '0xabc',
+        message: 'Processing',
+        providerData: {}
+      };
+
+      const result = refillUtils.buildTransactionUpdateData(
+        transaction,
+        transactionDetails,
+        'PROCESSING'  // Same mapped status
+      );
+
+      expect(result.hasChanges).toBe(false);
+      expect(result.updateData).toEqual({});
+    });
+
+    it('should include only changed fields', () => {
+      const transaction = {
+        status: 'PROCESSING',
+        providerStatus: 'SUBMITTED',
+        txHash: null,
+        message: null
+      };
+
+      const transactionDetails = {
+        status: 'BROADCASTING',  // Changed
+        txHash: '0xnew',         // Changed
+        message: 'Broadcasting',  // Changed
+        providerData: { id: 'fb-123' }
+      };
+
+      const result = refillUtils.buildTransactionUpdateData(
+        transaction,
+        transactionDetails,
+        'PROCESSING'  // Still PROCESSING
+      );
+
+      expect(result.hasChanges).toBe(true);
+      expect(result.updateData).toHaveProperty('providerStatus');
+      expect(result.updateData).toHaveProperty('txHash');
+      expect(result.updateData).toHaveProperty('message');
+      expect(result.updateData).toHaveProperty('providerData');
+      expect(result.updateData).not.toHaveProperty('status'); // Status unchanged
+      
+      expect(result.updateData.providerStatus).toBe('BROADCASTING');
+      expect(result.updateData.txHash).toBe('0xnew');
+      expect(result.updateData.message).toBe('Broadcasting');
+    });
+
+    it('should update status when mapped status changes', () => {
+      const transaction = {
+        status: 'PROCESSING',
+        providerStatus: 'BROADCASTING'
+      };
+
+      const transactionDetails = {
+        status: 'COMPLETED',
+        providerData: {}
+      };
+
+      const result = refillUtils.buildTransactionUpdateData(
+        transaction,
+        transactionDetails,
+        'COMPLETED'  // Changed from PROCESSING
+      );
+
+      expect(result.hasChanges).toBe(true);
+      expect(result.updateData.status).toBe('COMPLETED');
+      expect(result.updateData.providerStatus).toBe('COMPLETED');
+    });
+
+    it('should include providerData when providerStatus changes', () => {
+      const transaction = {
+        status: 'PROCESSING',
+        providerStatus: 'SUBMITTED'
+      };
+
+      const transactionDetails = {
+        status: 'PENDING_SIGNATURE',
+        providerData: { full: 'response' }
+      };
+
+      const result = refillUtils.buildTransactionUpdateData(
+        transaction,
+        transactionDetails,
+        'PROCESSING'
+      );
+
+      expect(result.hasChanges).toBe(true);
+      expect(result.updateData.providerStatus).toBe('PENDING_SIGNATURE');
+      expect(result.updateData.providerData).toEqual({ full: 'response' });
+    });
+
+    it('should not update providerData if providerStatus unchanged', () => {
+      const transaction = {
+        status: 'PROCESSING',
+        providerStatus: 'SUBMITTED',
+        txHash: null
+      };
+
+      const transactionDetails = {
+        status: 'SUBMITTED',  // Same
+        txHash: '0xnew',      // Changed
+        providerData: { data: 'here' }
+      };
+
+      const result = refillUtils.buildTransactionUpdateData(
+        transaction,
+        transactionDetails,
+        'PROCESSING'
+      );
+
+      expect(result.hasChanges).toBe(true);
+      expect(result.updateData).toHaveProperty('txHash');
+      expect(result.updateData).not.toHaveProperty('providerData'); // Not updated
+    });
+
+    it('should handle null/undefined values correctly', () => {
+      const transaction = {
+        status: 'PROCESSING',
+        providerStatus: 'SUBMITTED',
+        txHash: '0xold',
+        message: 'Old message'
+      };
+
+      const transactionDetails = {
+        status: 'BROADCASTING',
+        txHash: null,           // Null shouldn't update
+        message: undefined,     // Undefined shouldn't update
+        providerData: {}
+      };
+
+      const result = refillUtils.buildTransactionUpdateData(
+        transaction,
+        transactionDetails,
+        'PROCESSING'
+      );
+
+      expect(result.hasChanges).toBe(true);
+      expect(result.updateData).toHaveProperty('providerStatus');
+      expect(result.updateData).not.toHaveProperty('txHash');  // Null ignored
+      expect(result.updateData).not.toHaveProperty('message'); // Undefined ignored
+    });
+  });
 });
 

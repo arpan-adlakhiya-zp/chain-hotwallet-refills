@@ -63,7 +63,7 @@ describe('RefillService', () => {
       const validatedData = {
         wallet: { id: 1, address: '0x123' },
         asset: { id: 1, symbol: 'BTC', decimals: 8, sweepWalletConfig: { fireblocks: { vaultId: '0', assetId: 'BTC' } }, hotWalletConfig: { fireblocks: { vaultId: '1' } } },
-        blockchain: { id: 1, symbol: 'BTC' },
+        blockchain: { id: 1, symbol: 'BTC', name: 'Bitcoin' },  // Added name
         refillAmountAtomic: '100000000'
       };
 
@@ -94,6 +94,16 @@ describe('RefillService', () => {
       expect(result.success).toBe(true);
       expect(result.data.refillRequestId).toBe('REQ001');
       expect(result.data.provider).toBe('fireblocks');
+      
+      // Verify new tracking fields are included in transaction creation
+      expect(refillTransactionService.createRefillTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: '1.0',                      // Human-readable amount
+          chainName: 'Bitcoin',               // Blockchain name
+          tokenSymbol: 'BTC',
+          providerStatus: null                // Initially null, set later
+        })
+      );
     });
 
     it('should return error when provider not available', async () => {

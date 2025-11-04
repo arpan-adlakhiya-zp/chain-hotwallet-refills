@@ -1,6 +1,7 @@
 const logger = require('../middleware/logger')('refillTransactionService');
 const databaseService = require('./chainDb');
 const providerService = require('./providerService');
+const refillUtils = require('./utils/utils');
 
 class RefillTransactionService {
   constructor() {
@@ -191,14 +192,13 @@ class RefillTransactionService {
   }
 
   /**
-   * This method checks the transaction status in DB and fetches latest status from provider
-   * if the transaction is not in a final state
+   * Get transaction status from database only (fast, for external API)
    * @param {string} refillRequestId - External refill request ID
    * @returns {Promise<Object>} Standardized response with transaction status
    */
-  async checkTransactionStatus(refillRequestId) {
+  async getTransactionStatusFromDB(refillRequestId) {
     try {
-      logger.info(`Checking transaction status for refill request in DB: ${refillRequestId}`);
+      logger.info(`Getting transaction status from DB: ${refillRequestId}`);
 
       // Get transaction from database
       const transactionResult = await this.getRefillTransactionByRequestId(refillRequestId);
@@ -215,29 +215,48 @@ class RefillTransactionService {
       }
 
       const transaction = transactionResult.data.transaction;
+
+      return {
+        success: true,
+        error: null,
+        code: null,
+        data: {
+          refillRequestId: refillRequestId,
+          status: transaction.status,
+          provider: transaction.provider,
+          providerTxId: transaction.providerTxId,
+          txHash: transaction.txHash,
+          message: transaction.message,
+          createdAt: transaction.createdAt,
+          updatedAt: transaction.updatedAt
+        }
+      };
+    } catch (error) {
+      logger.error(`Error getting transaction status from DB: ${error.message}`);
+      return {
+        success: false,
+        error: 'Failed to get transaction status',
+        code: 'STATUS_CHECK_ERROR',
+        data: {
+          details: error.message
+        }
+      };
+    }
+  }
+
+  /**
+   * Check transaction status from provider and update database (used by cron monitor)
+   * @param {Object} transaction - Transaction object from database
+   * @returns {Promise<Object>} Standardized response with transaction status
+   */
+  async checkAndUpdateTransactionFromProvider(transaction) {
+    try {
+      const refillRequestId = transaction.refillRequestId;
       const providerName = transaction.provider;
       const currentStatus = transaction.status;
       const providerTxId = transaction.providerTxId;
 
-      logger.info(`Transaction found - Provider: ${providerName}, Current Status: ${currentStatus}, Provider TX ID: ${providerTxId}`);
-
-      // Check if status is final - if so, just return the current status
-      if (this.isFinalStatus(currentStatus)) {
-        logger.info(`Transaction is in final status: ${currentStatus}, returning current status`);
-        return {
-          success: true,
-          error: null,
-          code: null,
-          data: {
-            refillRequestId: refillRequestId,
-            status: currentStatus,
-            provider: providerName,
-            providerTxId: providerTxId,
-            txHash: transaction.txHash,
-            message: transaction.message
-          }
-        };
-      }
+      logger.info(`Fetching latest status from provider for ${refillRequestId}: ${providerName} - ${providerTxId}`);
 
       // Get providers from provider service
       await providerService.initialize();
@@ -324,26 +343,23 @@ class RefillTransactionService {
 
       // Extract transaction details from provider response
       const transactionDetails = this.extractTransactionDetails(providerName, providerStatusResponse);
-
-      // Map provider status to internal status
       const mappedStatus = this.mapProviderStatusToInternal(providerName, transactionDetails.status);
 
-      // Check if txn needs to be updated in the DB
-      if (mappedStatus !== currentStatus) {
-        logger.info(`Updating transaction status from ${currentStatus} to ${mappedStatus} in DB`);
+      // Build update data - only include fields that changed
+      const { updateData, hasChanges } = refillUtils.buildTransactionUpdateData(
+        transaction,
+        transactionDetails,
+        mappedStatus
+      );
 
-        // Prepare update data
-        const updateData = {
-          status: mappedStatus,
-          txHash: transactionDetails.txHash,
-          message: transactionDetails.message,
-          providerData: transactionDetails.providerData
-        };
+      // Only update database if something actually changed
+      if (hasChanges) {
+        logger.info(`Updating transaction ${refillRequestId} in DB with changed fields`);
         
         const updateResult = await this.updateRefillTransaction(refillRequestId, updateData);
         
         if (!updateResult.success) {
-          logger.error(`Failed to update transaction status: ${updateResult.error}`);
+          logger.error(`Failed to update transaction: ${updateResult.error}`);
         }
         
         return {
@@ -352,16 +368,17 @@ class RefillTransactionService {
           code: null,
           data: {
             refillRequestId: refillRequestId,
-            status: mappedStatus,
+            status: updateData.status || currentStatus,
             provider: providerName,
             providerTxId: providerTxId,
-            txHash: updateData.txHash,
-            message: updateData.message,
-            previousStatus: currentStatus
+            txHash: updateData.txHash || transaction.txHash,
+            message: updateData.message || transaction.message,
+            previousStatus: currentStatus,
+            updated: true
           }
         };
       } else {
-        logger.info(`Transaction status unchanged: ${currentStatus}`);
+        logger.debug(`No changes detected for transaction ${refillRequestId}`);
         return {
           success: true,
           error: null,
@@ -372,7 +389,8 @@ class RefillTransactionService {
             provider: providerName,
             providerTxId: providerTxId,
             txHash: transaction.txHash,
-            message: transaction.message
+            message: transaction.message,
+            updated: false
           }
         };
       }

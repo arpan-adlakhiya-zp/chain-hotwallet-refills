@@ -58,9 +58,24 @@ function getPendingTransactionByAssetId(assetId) {
   });
 }
 
+/**
+ * Get refill transactions by status
+ * @param {string} status - Transaction status
+ * @param {number} limit - Number of records to return
+ * @returns {Promise<Array>} Array of transactions
+ */
+function getTransactionsByStatus(status, limit = 100) {
+  return db.RefillTransaction.findAll({
+    where: { status: status },
+    limit: limit,
+    order: [['createdAt', 'ASC']] // Oldest first for monitoring
+  });
+}
+
 module.exports = {
   createRefillTransaction,
   updateRefillTransaction,
   getRefillTransactionByRequestId,
-  getPendingTransactionByAssetId
+  getPendingTransactionByAssetId,
+  getTransactionsByStatus
 };

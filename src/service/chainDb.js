@@ -130,6 +130,16 @@ class DatabaseService {
     }
   }
 
+  async getTransactionsByStatus(status, limit = 100) {
+    try {
+      await this.connect();
+      return await refillTransactionHelper.getTransactionsByStatus(status, limit);
+    } catch (error) {
+      logger.error(`Error getting transactions by status: ${error.message}`);
+      throw error;
+    }
+  }
+
   // Health check method
   async healthCheck() {
     try {

@@ -70,11 +70,29 @@ module.exports = (sequelize) => {
       allowNull: false,
       comment: 'Amount in atomic units'
     },
+    amount: {
+      field: 'amount',
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Amount in human-readable format (not atomic units)'
+    },
     tokenSymbol: {
       field: 'token_symbol',
       type: DataTypes.STRING(50),
       allowNull: true,
       comment: 'Token symbol (e.g., USDC, ETH, BTC)'
+    },
+    chainName: {
+      field: 'chain_name',
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      comment: 'Blockchain name for easy identification'
+    },
+    providerStatus: {
+      field: 'provider_status',
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Raw status from provider (before mapping to internal status)'
     },
     
     // Blockchain transaction hash (for reference only)

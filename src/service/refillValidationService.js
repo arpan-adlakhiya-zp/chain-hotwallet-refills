@@ -62,8 +62,8 @@ class RefillValidationService {
         return pendingRefillCheck;
       }
 
-      // Determine the correct hot wallet address based on token type
-      const hotWalletAddress = this.determineHotWalletAddress(refillData, assetValidation.data.asset);
+  // Validate and determine the correct hot wallet address based on token type
+  const hotWalletAddress = this.validateHotWalletAddress(refillData, assetValidation.data.asset);
 
       // Validate refill_sweep_wallet matches the asset's configured sweep wallet
       const sweepWalletValidation = await this.validateRefillSweepWallet(
@@ -192,24 +192,39 @@ class RefillValidationService {
   }
 
   /**
-   * Determine the correct hot wallet address based on token type
+   * Validate the hot wallet address and asset address
    * @param {Object} refillData - The refill request data.
    * @param {Object} asset - The asset data.
    * @returns {string} The correct hot wallet address.
    */
-  determineHotWalletAddress(refillData, asset) {
-    // - For native tokens: use the wallet_address from refillData
-    // - For contract tokens: use the wallet_id associated with the asset in the assets table
-    if (refillData.asset_address === "native") {
-      return refillData.wallet_address;
-    } else {
-      // For contract tokens, get the hot wallet address from the asset's wallet_id
-      if (asset && asset.Wallet && asset.Wallet.address) {
-        return asset.Wallet.address;
-      } else {
-        throw new Error('Contract token asset must have an associated wallet');
+  validateHotWalletAddress(refillData, asset) {
+    const inputWallet = (refillData.wallet_address || '').toString();
+    const inputAssetAddress = (refillData.asset_address || '').toString();
+    const dbWallet = asset && asset.Wallet && asset.Wallet.address ? asset.Wallet.address.toString() : null;
+    const dbAssetAddress = asset && asset.contractAddress ? asset.contractAddress.toString() : null;
+
+    if (!dbWallet) {
+      throw new Error(`Hot wallet not configured for asset: ${asset.symbol}`);
+    }
+
+    // Ensure incoming wallet matches DB hot wallet address
+    if (inputWallet.toLowerCase() !== dbWallet.toLowerCase()) {
+      throw new Error(`Hot wallet address mismatch. Expected: ${dbWallet}, Got: ${inputWallet}`);
+    }
+
+    // Verify asset address for contract based token
+    if (inputAssetAddress.toLowerCase() !== 'native' || dbAssetAddress.toLowerCase() !== 'native') {
+      if (!dbAssetAddress) {
+        throw new Error(`Contract address not configured for asset: ${asset.symbol}`);
+      }
+
+      // If an input asset address was provided, ensure it matches the DB (case-insensitive)
+      if (inputAssetAddress.toLowerCase() !== dbAssetAddress.toLowerCase()) {
+        throw new Error(`Contract address mismatch. Expected: ${dbAssetAddress}, Got: ${inputAssetAddress}`);
       }
     }
+
+    return dbWallet;
   }
 
   /**
@@ -565,6 +580,26 @@ class RefillValidationService {
             checkedAt: new Date().toISOString()
           }
         };
+      }
+
+      // Check if refill would cause balance to exceed the target
+      // (prevent overfilling when currentBalance + refillAmountAtomic > targetBalance)
+      if (refillAmountAtomic && targetBalance.gt(0)) {
+        const projectedBalance = currentBalance.plus(refillAmountAtomic);
+        if (projectedBalance.gt(targetBalance)) {
+          return {
+            success: false,
+            error: 'Refill would overfill hot wallet target balance',
+            code: 'WILL_OVERFILL_TARGET',
+            data: {
+              current: currentBalance.toString(),
+              refillAmount: refillAmountAtomic.toString(),
+              projected: projectedBalance.toString(),
+              target: targetBalance.toString(),
+              checkedAt: new Date().toISOString()
+            }
+          };
+        }
       }
 
       return {

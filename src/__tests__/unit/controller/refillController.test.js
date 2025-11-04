@@ -132,7 +132,7 @@ describe('RefillController', () => {
         }
       };
 
-      refillTransactionService.checkTransactionStatus.mockResolvedValue(mockResult);
+      refillTransactionService.getTransactionStatusFromDB.mockResolvedValue(mockResult);
 
       await checkTransactionStatusController(mockReq, mockRes, mockNext);
 
@@ -149,7 +149,7 @@ describe('RefillController', () => {
         code: 'TRANSACTION_NOT_FOUND'
       };
 
-      refillTransactionService.checkTransactionStatus.mockResolvedValue(mockResult);
+      refillTransactionService.getTransactionStatusFromDB.mockResolvedValue(mockResult);
 
       await checkTransactionStatusController(mockReq, mockRes, mockNext);
 
@@ -170,13 +170,13 @@ describe('RefillController', () => {
           error: 'refill_request_id is required'
         })
       );
-      expect(refillTransactionService.checkTransactionStatus).not.toHaveBeenCalled();
+      expect(refillTransactionService.getTransactionStatusFromDB).not.toHaveBeenCalled();
     });
 
     it('should return 500 on internal server error', async () => {
       mockReq.params = { refill_request_id: 'REQ001' };
 
-      refillTransactionService.checkTransactionStatus.mockRejectedValue(
+      refillTransactionService.getTransactionStatusFromDB.mockRejectedValue(
         new Error('Database error')
       );
 
@@ -190,6 +190,21 @@ describe('RefillController', () => {
           code: 'INTERNAL_ERROR'
         })
       );
+    });
+
+    it('should use DB-only check (no provider call)', async () => {
+      mockReq.params = { refill_request_id: 'REQ001' };
+
+      refillTransactionService.getTransactionStatusFromDB.mockResolvedValue({
+        success: true,
+        data: { status: 'PROCESSING' }
+      });
+
+      await checkTransactionStatusController(mockReq, mockRes, mockNext);
+
+      // Should call DB method, not provider method
+      expect(refillTransactionService.getTransactionStatusFromDB).toHaveBeenCalled();
+      expect(refillTransactionService.checkAndUpdateTransactionFromProvider).not.toHaveBeenCalled();
     });
   });
 });

@@ -298,7 +298,7 @@ describe('Refill Flow Integration Tests', () => {
 
   describe('GET /v1/wallet/refill/status/:refill_request_id', () => {
     it('should return transaction status for completed transaction', async () => {
-      refillTransactionService.checkTransactionStatus.mockResolvedValue({
+      refillTransactionService.getTransactionStatusFromDB.mockResolvedValue({
         success: true,
         data: {
           refillRequestId: 'REQ001',
@@ -319,7 +319,7 @@ describe('Refill Flow Integration Tests', () => {
     });
 
     it('should return transaction status for pending transaction', async () => {
-      refillTransactionService.checkTransactionStatus.mockResolvedValue({
+      refillTransactionService.getTransactionStatusFromDB.mockResolvedValue({
         success: true,
         data: {
           refillRequestId: 'REQ002',
@@ -337,7 +337,7 @@ describe('Refill Flow Integration Tests', () => {
     });
 
     it('should return 404 when transaction not found', async () => {
-      refillTransactionService.checkTransactionStatus.mockResolvedValue({
+      refillTransactionService.getTransactionStatusFromDB.mockResolvedValue({
         success: false,
         error: 'Transaction not found',
         code: 'TRANSACTION_NOT_FOUND',

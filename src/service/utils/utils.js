@@ -147,6 +147,50 @@ class RefillUtils {
       };
     }
   }
+
+  /**
+   * Build update data by comparing provider response with current DB transaction
+   * Only returns fields that have actually changed
+   * @param {Object} dbTransaction - Current transaction from database
+   * @param {Object} providerDetails - Details extracted from provider response
+   * @param {string} mappedStatus - Internal status (mapped from provider status)
+   * @returns {Object} { updateData, hasChanges } - Fields to update and whether any changed
+   */
+  buildTransactionUpdateData(dbTransaction, providerDetails, mappedStatus) {
+    const updateData = {};
+    let hasChanges = false;
+
+    // Check if mapped status changed
+    if (mappedStatus !== dbTransaction.status) {
+      updateData.status = mappedStatus;
+      hasChanges = true;
+      logger.info(`Status updated: ${dbTransaction.status} → ${mappedStatus}`);
+    }
+
+    // Check if raw provider status changed
+    if (providerDetails.status && providerDetails.status !== dbTransaction.providerStatus) {
+      updateData.providerStatus = providerDetails.status;
+      updateData.providerData = providerDetails.providerData; // Include full response
+      hasChanges = true;
+      logger.info(`Provider status updated: ${dbTransaction.providerStatus} → ${providerDetails.status}`);
+    }
+
+    // Check if txHash added
+    if (providerDetails.txHash && providerDetails.txHash !== dbTransaction.txHash) {
+      updateData.txHash = providerDetails.txHash;
+      hasChanges = true;
+      logger.info(`TxHash: ${providerDetails.txHash}`);
+    }
+
+    // Check if message changed
+    if (providerDetails.message && providerDetails.message !== dbTransaction.message) {
+      updateData.message = providerDetails.message;
+      hasChanges = true;
+      logger.info(`Message updated: ${dbTransaction.message} → ${providerDetails.message}`);
+    }
+
+    return { updateData, hasChanges };
+  }
 }
 
 module.exports = new RefillUtils();

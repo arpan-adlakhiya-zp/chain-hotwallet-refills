@@ -44,7 +44,8 @@ async function checkTransactionStatusController(req, res, next) {
 
     logger.info(`Checking transaction status for refill request: ${refill_request_id}`);
 
-    const result = await refillTransactionService.checkTransactionStatus(refill_request_id);
+    // Get status from DB only (cron updates from provider in background)
+    const result = await refillTransactionService.getTransactionStatusFromDB(refill_request_id);
 
     if (result.success) {
       res.status(200).json(result);

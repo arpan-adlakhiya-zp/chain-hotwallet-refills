@@ -57,57 +57,158 @@ describe('RefillValidationService', () => {
     });
   });
 
-  describe('determineHotWalletAddress', () => {
-    it('should return wallet_address for native tokens', () => {
+  describe('validateHotWalletAddress', () => {
+    it('should return db wallet address for native tokens when they match', () => {
       const refillData = {
         wallet_address: '0x123abc',
         asset_address: 'native'
       };
-      const asset = {};
+      const asset = {
+        symbol: 'BTC',
+        contractAddress: 'native',
+        Wallet: { address: '0x123abc' }
+      };
 
-      const result = refillValidationService.determineHotWalletAddress(refillData, asset);
+      const result = refillValidationService.validateHotWalletAddress(refillData, asset);
       
       expect(result).toBe('0x123abc');
     });
 
-    it('should return asset wallet address for contract tokens', () => {
+    it('should throw when wallet address does not match DB', () => {
       const refillData = {
-        wallet_address: '0x123',
+        wallet_address: '0xother',
+        asset_address: 'native'
+      };
+      const asset = {
+        symbol: 'BTC',
+        contractAddress: 'native',
+        Wallet: { address: '0x123abc' }
+      };
+
+      expect(() => {
+        refillValidationService.validateHotWalletAddress(refillData, asset);
+      }).toThrow(/Hot wallet address mismatch/);
+    });
+
+    it('should return asset wallet address for contract tokens when both addresses match', () => {
+      const refillData = {
+        wallet_address: '0xwalletaddress',
         asset_address: '0xcontract'
       };
       const asset = {
+        symbol: 'USDC',
+        contractAddress: '0xcontract',
         Wallet: {
           address: '0xwalletaddress'
         }
       };
 
-      const result = refillValidationService.determineHotWalletAddress(refillData, asset);
+      const result = refillValidationService.validateHotWalletAddress(refillData, asset);
       
       expect(result).toBe('0xwalletaddress');
     });
 
-    it('should throw error for contract token without wallet', () => {
+    it('should throw when contract address does not match DB', () => {
       const refillData = {
-        asset_address: '0xcontract'
+        wallet_address: '0xwalletaddress',
+        asset_address: '0xwrongcontract'
       };
-      const asset = {};
+      const asset = {
+        symbol: 'USDC',
+        contractAddress: '0xcontract',
+        Wallet: {
+          address: '0xwalletaddress'
+        }
+      };
 
       expect(() => {
-        refillValidationService.determineHotWalletAddress(refillData, asset);
-      }).toThrow('Contract token asset must have an associated wallet');
+        refillValidationService.validateHotWalletAddress(refillData, asset);
+      }).toThrow(/Contract address mismatch/);
     });
 
-    it('should throw error when asset.Wallet is null', () => {
+    it('should handle case-insensitive contract address comparison', () => {
       const refillData = {
+        wallet_address: '0xwalletaddress',
+        asset_address: '0xCONTRACT'
+      };
+      const asset = {
+        symbol: 'USDC',
+        contractAddress: '0xcontract',
+        Wallet: {
+          address: '0xwalletaddress'
+        }
+      };
+
+      const result = refillValidationService.validateHotWalletAddress(refillData, asset);
+      
+      expect(result).toBe('0xwalletaddress');
+    });
+
+    it('should throw error when wallet is not configured', () => {
+      const refillData = {
+        wallet_address: '0xwallet',
         asset_address: '0xcontract'
       };
       const asset = {
+        symbol: 'USDC',
+        contractAddress: '0xcontract',
         Wallet: null
       };
 
       expect(() => {
-        refillValidationService.determineHotWalletAddress(refillData, asset);
-      }).toThrow('Contract token asset must have an associated wallet');
+        refillValidationService.validateHotWalletAddress(refillData, asset);
+      }).toThrow(/Hot wallet not configured for asset/);
+    });
+
+    it('should throw error when asset.Wallet is missing', () => {
+      const refillData = {
+        wallet_address: '0xwallet',
+        asset_address: '0xcontract'
+      };
+      const asset = {
+        symbol: 'USDC',
+        contractAddress: '0xcontract'
+      };
+
+      expect(() => {
+        refillValidationService.validateHotWalletAddress(refillData, asset);
+      }).toThrow(/Hot wallet not configured for asset/);
+    });
+
+    it('should throw error when contract address is not configured in DB', () => {
+      const refillData = {
+        wallet_address: '0xwalletaddress',
+        asset_address: '0xcontract'
+      };
+      const asset = {
+        symbol: 'USDC',
+        contractAddress: null,
+        Wallet: {
+          address: '0xwalletaddress'
+        }
+      };
+
+      expect(() => {
+        refillValidationService.validateHotWalletAddress(refillData, asset);
+      }).toThrow(/Contract address not configured for asset/);
+    });
+
+    it('should handle case-insensitive wallet address comparison', () => {
+      const refillData = {
+        wallet_address: '0xWALLETADDRESS',
+        asset_address: 'native'
+      };
+      const asset = {
+        symbol: 'ETH',
+        contractAddress: 'native',
+        Wallet: {
+          address: '0xwalletaddress'
+        }
+      };
+
+      const result = refillValidationService.validateHotWalletAddress(refillData, asset);
+      
+      expect(result).toBe('0xwalletaddress');
     });
   });
 
@@ -254,13 +355,34 @@ describe('RefillValidationService', () => {
 
       const result = await refillValidationService.validateHotWalletNeedsRefill(
         '0x123',
-        1.0,
+        0.4,
         mockProvider,
         asset
       );
 
       expect(result.success).toBe(true);
       expect(result.data.wallet).toEqual(mockWallet);
+    });
+
+    it('should fail when refill would overfill the target balance', async () => {
+      const asset = createMockAsset({
+        refillTargetBalanceAtomic: '100000000', // 1 BTC target
+        refillTriggerThresholdAtomic: '50000000' // 0.5 BTC trigger
+      });
+      const mockWallet = createMockWallet();
+
+      databaseService.getWalletByAddress.mockResolvedValue(mockWallet);
+      mockProvider.getTokenBalance.mockResolvedValue('30000000'); // 0.3 BTC - below trigger
+
+      const result = await refillValidationService.validateHotWalletNeedsRefill(
+        '0x123',
+        1.0, // would cause projected 1.3 BTC > 1.0 BTC target
+        mockProvider,
+        asset
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('WILL_OVERFILL_TARGET');
     });
 
     it('should fail when hot wallet not found', async () => {

@@ -222,5 +222,29 @@ describe('DatabaseService (chainDb)', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('getTransactionsByStatus', () => {
+    it('should connect and call transaction helper', async () => {
+      const mockTransactions = [
+        { id: 1, status: 'PENDING' },
+        { id: 2, status: 'PENDING' }
+      ];
+      refillTransactionHelper.getTransactionsByStatus.mockResolvedValue(mockTransactions);
+
+      const result = await databaseService.getTransactionsByStatus('PENDING', 50);
+
+      expect(mockSequelize.authenticate).toHaveBeenCalled();
+      expect(refillTransactionHelper.getTransactionsByStatus).toHaveBeenCalledWith('PENDING', 50);
+      expect(result).toEqual(mockTransactions);
+    });
+
+    it('should use default limit when not specified', async () => {
+      refillTransactionHelper.getTransactionsByStatus.mockResolvedValue([]);
+
+      await databaseService.getTransactionsByStatus('PROCESSING');
+
+      expect(refillTransactionHelper.getTransactionsByStatus).toHaveBeenCalledWith('PROCESSING', 100);
+    });
+  });
 });
 

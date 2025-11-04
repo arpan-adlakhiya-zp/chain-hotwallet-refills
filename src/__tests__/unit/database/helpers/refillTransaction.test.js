@@ -41,6 +41,33 @@ describe('RefillTransaction Helper', () => {
 
       expect(db.RefillTransaction.create).toHaveBeenCalledWith(partialData);
     });
+
+    it('should store new tracking fields (chain_name, amount, provider_status)', async () => {
+      const transactionData = {
+        refillRequestId: 'REQ003',
+        provider: 'fireblocks',
+        status: 'PENDING',
+        amountAtomic: '100000000',
+        amount: '1.0',                    // Human-readable amount
+        tokenSymbol: 'BTC',
+        chainName: 'Bitcoin',             // Blockchain name
+        assetId: 1,
+        providerStatus: null              // Initially null
+      };
+
+      db.RefillTransaction.create = jest.fn().mockResolvedValue({ id: 125, ...transactionData });
+
+      const result = await refillTransactionHelper.createRefillTransaction(transactionData);
+
+      expect(db.RefillTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: '1.0',
+          chainName: 'Bitcoin',
+          providerStatus: null
+        })
+      );
+      expect(result).toBeDefined();
+    });
   });
 
   describe('updateRefillTransaction', () => {
@@ -67,6 +94,26 @@ describe('RefillTransaction Helper', () => {
       const result = await refillTransactionHelper.updateRefillTransaction('NONEXISTENT', {});
 
       expect(result).toEqual([0]);
+    });
+
+    it('should update with provider_status field', async () => {
+      const updateData = {
+        status: 'PROCESSING',
+        providerStatus: 'SUBMITTED',  // Raw Fireblocks status
+        txHash: '0x123'
+      };
+
+      db.RefillTransaction.update = jest.fn().mockResolvedValue([1]);
+
+      const result = await refillTransactionHelper.updateRefillTransaction('REQ001', updateData);
+
+      expect(db.RefillTransaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerStatus: 'SUBMITTED'
+        }),
+        expect.any(Object)
+      );
+      expect(result).toEqual([1]);
     });
   });
 
@@ -177,6 +224,53 @@ describe('RefillTransaction Helper', () => {
       const callArgs = db.RefillTransaction.findOne.mock.calls[0][0];
       expect(callArgs.where.status[db.Sequelize.Op.in]).not.toContain('COMPLETED');
       expect(callArgs.where.status[db.Sequelize.Op.in]).not.toContain('FAILED');
+    });
+  });
+
+  describe('getTransactionsByStatus', () => {
+    it('should fetch transactions with specified status', async () => {
+      const mockTransactions = [
+        { id: 1, refillRequestId: 'REQ001', status: 'PENDING' },
+        { id: 2, refillRequestId: 'REQ002', status: 'PENDING' }
+      ];
+
+      db.RefillTransaction.findAll = jest.fn().mockResolvedValue(mockTransactions);
+
+      const result = await refillTransactionHelper.getTransactionsByStatus('PENDING', 50);
+
+      expect(db.RefillTransaction.findAll).toHaveBeenCalledWith({
+        where: { status: 'PENDING' },
+        limit: 50,
+        order: [['createdAt', 'ASC']]
+      });
+      expect(result).toEqual(mockTransactions);
+      expect(result).toHaveLength(2);
+    });
+
+    it('should use default limit of 100', async () => {
+      db.RefillTransaction.findAll = jest.fn().mockResolvedValue([]);
+
+      await refillTransactionHelper.getTransactionsByStatus('PROCESSING');
+
+      const callArgs = db.RefillTransaction.findAll.mock.calls[0][0];
+      expect(callArgs.limit).toBe(100);
+    });
+
+    it('should order by createdAt ASC (oldest first)', async () => {
+      db.RefillTransaction.findAll = jest.fn().mockResolvedValue([]);
+
+      await refillTransactionHelper.getTransactionsByStatus('PENDING');
+
+      const callArgs = db.RefillTransaction.findAll.mock.calls[0][0];
+      expect(callArgs.order).toEqual([['createdAt', 'ASC']]);
+    });
+
+    it('should return empty array when no transactions found', async () => {
+      db.RefillTransaction.findAll = jest.fn().mockResolvedValue([]);
+
+      const result = await refillTransactionHelper.getTransactionsByStatus('COMPLETED');
+
+      expect(result).toEqual([]);
     });
   });
 });
