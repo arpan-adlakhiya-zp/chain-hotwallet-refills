@@ -94,11 +94,11 @@ class RefillUtils {
    */
   getWalletConfig(providerName, walletConfig) {
     if (providerName === 'liminal') {
-      if (!walletConfig.liminal || !walletConfig.liminal.walletId) {
+      if (!walletConfig.liminal || !walletConfig.liminal.walletId || !walletConfig.liminal.tokenSymbol || !walletConfig.liminal.version) {
         return {
           success: false,
-          error: 'No Liminal cold wallet configuration found for this asset',
-          code: 'NO_LIMINAL_COLD_WALLET_CONFIGURED',
+          error: 'Invalid cold wallet configuration found for this asset',
+          code: 'INVALID_LIMINAL_COLD_WALLET_CONFIGURATION',
           data: null
         };
       }
@@ -110,7 +110,9 @@ class RefillUtils {
         data: {
           walletConfig: {
             liminal: {
-              walletId: walletConfig.liminal.walletId
+              walletId: walletConfig.liminal.walletId,
+              version: walletConfig.liminal.version,
+              tokenSymbol: walletConfig.liminal.tokenSymbol
             }
           }
         }
@@ -119,8 +121,8 @@ class RefillUtils {
       if (!walletConfig.fireblocks || !walletConfig.fireblocks.vaultId || !walletConfig.fireblocks.assetId) {
         return {
           success: false,
-          error: 'No Fireblocks cold wallet configuration found for this asset',
-          code: 'NO_FIREBLOCKS_COLD_WALLET_CONFIGURED',
+          error: 'Invalid cold wallet configuration found for this asset',
+          code: 'INVALID_FIREBLOCKS_COLD_WALLET_CONFIGURATION',
           data: null
         };
       }

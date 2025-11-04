@@ -62,8 +62,11 @@ class RefillValidationService {
         return pendingRefillCheck;
       }
 
-  // Validate and determine the correct hot wallet address based on token type
-  const hotWalletAddress = this.validateHotWalletAddress(refillData, assetValidation.data.asset);
+      // Validate and determine the correct hot wallet address based on token type
+      const hotWalletAddressValidation = this.validateHotWalletAddress(refillData, assetValidation.data.asset);
+      if (!hotWalletAddressValidation.success) {
+        return hotWalletAddressValidation;
+      }
 
       // Validate refill_sweep_wallet matches the asset's configured sweep wallet
       const sweepWalletValidation = await this.validateRefillSweepWallet(
@@ -97,7 +100,7 @@ class RefillValidationService {
 
       // Check if hot wallet needs refill
       const hotWalletValidation = await this.validateHotWalletNeedsRefill(
-        hotWalletAddress,
+        hotWalletAddressValidation.data.walletAddress,
         refillData.refill_amount,
         provider,
         assetValidation.data.asset
@@ -198,33 +201,52 @@ class RefillValidationService {
    * @returns {string} The correct hot wallet address.
    */
   validateHotWalletAddress(refillData, asset) {
-    const inputWallet = (refillData.wallet_address || '').toString();
-    const inputAssetAddress = (refillData.asset_address || '').toString();
-    const dbWallet = asset && asset.Wallet && asset.Wallet.address ? asset.Wallet.address.toString() : null;
-    const dbAssetAddress = asset && asset.contractAddress ? asset.contractAddress.toString() : null;
-
-    if (!dbWallet) {
-      throw new Error(`Hot wallet not configured for asset: ${asset.symbol}`);
-    }
-
-    // Ensure incoming wallet matches DB hot wallet address
-    if (inputWallet.toLowerCase() !== dbWallet.toLowerCase()) {
-      throw new Error(`Hot wallet address mismatch. Expected: ${dbWallet}, Got: ${inputWallet}`);
-    }
-
-    // Verify asset address for contract based token
-    if (inputAssetAddress.toLowerCase() !== 'native' || dbAssetAddress.toLowerCase() !== 'native') {
-      if (!dbAssetAddress) {
-        throw new Error(`Contract address not configured for asset: ${asset.symbol}`);
+    try {
+      const inputWallet = (refillData.wallet_address || '').toString();
+      const inputAssetAddress = (refillData.asset_address || '').toString();
+      const dbWallet = asset && asset.Wallet && asset.Wallet.address ? asset.Wallet.address.toString() : null;
+      const dbAssetAddress = asset && asset.contractAddress ? asset.contractAddress.toString() : null;
+  
+      if (!dbWallet) {
+        throw new Error(`Hot wallet not configured for asset: ${asset.symbol}`);
       }
-
-      // If an input asset address was provided, ensure it matches the DB (case-insensitive)
-      if (inputAssetAddress.toLowerCase() !== dbAssetAddress.toLowerCase()) {
-        throw new Error(`Contract address mismatch. Expected: ${dbAssetAddress}, Got: ${inputAssetAddress}`);
+  
+      // Ensure incoming wallet matches DB hot wallet address
+      if (inputWallet.toLowerCase() !== dbWallet.toLowerCase()) {
+        throw new Error(`Hot wallet address mismatch. Expected: ${dbWallet}, Got: ${inputWallet}`);
       }
+  
+      // Verify asset address for contract based token
+      if (inputAssetAddress.toLowerCase() !== 'native' || dbAssetAddress.toLowerCase() !== 'native') {
+        if (!dbAssetAddress) {
+          throw new Error(`Contract address not configured for asset: ${asset.symbol}`);
+        }
+  
+        // If an input asset address was provided, ensure it matches the DB (case-insensitive)
+        if (inputAssetAddress.toLowerCase() !== dbAssetAddress.toLowerCase()) {
+          throw new Error(`Contract address mismatch. Expected: ${dbAssetAddress}, Got: ${inputAssetAddress}`);
+        }
+      }
+  
+      return {
+        success: true,
+        error: null,
+        code: null,
+        data: {
+          walletAddress: dbWallet
+        }
+      }
+    } catch (error) {
+      logger.error(`Error validating hot wallet address: ${error.message}`);
+      return {
+        success: false,
+        error: 'Error while validating hot wallet address',
+        code: 'HOT_WALLET_ADDRESS_VALIDATION_ERROR',
+        data: {
+          details: error.message
+        }
+      };
     }
-
-    return dbWallet;
   }
 
   /**

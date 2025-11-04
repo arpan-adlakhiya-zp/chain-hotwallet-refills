@@ -206,10 +206,10 @@ class RefillService {
         hotWalletAddress: validatedData.wallet.address,
         amount: amount,
         asset: validatedData.asset.symbol,
-        assetId: provider.constructor.getProviderName() === 'fireblocks' ? validatedData.asset.sweepWalletConfig.fireblocks.assetId : "",
         blockchain: validatedData.blockchain.symbol,
         contractAddress: validatedData.asset.contractAddress,
-        externalTxId: refillRequestId // For idempotency
+        externalTxId: `${refillRequestId}_refill`, // For idempotency
+        coldWalletConfig: validatedData.asset.sweepWalletConfig
       };
 
       const transferRequest = await provider.createTransferRequest(transferData);

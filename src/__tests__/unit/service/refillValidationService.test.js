@@ -71,7 +71,8 @@ describe('RefillValidationService', () => {
 
       const result = refillValidationService.validateHotWalletAddress(refillData, asset);
       
-      expect(result).toBe('0x123abc');
+      expect(result.success).toBe(true);
+      expect(result.data.walletAddress).toBe('0x123abc');
     });
 
     it('should throw when wallet address does not match DB', () => {
@@ -85,9 +86,12 @@ describe('RefillValidationService', () => {
         Wallet: { address: '0x123abc' }
       };
 
-      expect(() => {
-        refillValidationService.validateHotWalletAddress(refillData, asset);
-      }).toThrow(/Hot wallet address mismatch/);
+      const result = refillValidationService.validateHotWalletAddress(refillData, asset);
+      
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('HOT_WALLET_ADDRESS_VALIDATION_ERROR');
+      expect(result.error).toContain('Error while validating hot wallet address');
+      expect(result.data.details).toContain('Hot wallet address mismatch. Expected: 0x123abc, Got: 0xother');
     });
 
     it('should return asset wallet address for contract tokens when both addresses match', () => {
@@ -105,7 +109,8 @@ describe('RefillValidationService', () => {
 
       const result = refillValidationService.validateHotWalletAddress(refillData, asset);
       
-      expect(result).toBe('0xwalletaddress');
+      expect(result.success).toBe(true);
+      expect(result.data.walletAddress).toBe('0xwalletaddress');
     });
 
     it('should throw when contract address does not match DB', () => {
@@ -121,9 +126,12 @@ describe('RefillValidationService', () => {
         }
       };
 
-      expect(() => {
-        refillValidationService.validateHotWalletAddress(refillData, asset);
-      }).toThrow(/Contract address mismatch/);
+      const result = refillValidationService.validateHotWalletAddress(refillData, asset);
+      
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('HOT_WALLET_ADDRESS_VALIDATION_ERROR');
+      expect(result.error).toContain('Error while validating hot wallet address');
+      expect(result.data.details).toContain('Contract address mismatch. Expected: 0xcontract, Got: 0xwrongcontract');
     });
 
     it('should handle case-insensitive contract address comparison', () => {
@@ -141,7 +149,8 @@ describe('RefillValidationService', () => {
 
       const result = refillValidationService.validateHotWalletAddress(refillData, asset);
       
-      expect(result).toBe('0xwalletaddress');
+      expect(result.success).toBe(true);
+      expect(result.data.walletAddress).toBe('0xwalletaddress');
     });
 
     it('should throw error when wallet is not configured', () => {
@@ -155,9 +164,12 @@ describe('RefillValidationService', () => {
         Wallet: null
       };
 
-      expect(() => {
-        refillValidationService.validateHotWalletAddress(refillData, asset);
-      }).toThrow(/Hot wallet not configured for asset/);
+      const result = refillValidationService.validateHotWalletAddress(refillData, asset);
+      
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('HOT_WALLET_ADDRESS_VALIDATION_ERROR');
+      expect(result.error).toContain('Error while validating hot wallet address');
+      expect(result.data.details).toContain('Hot wallet not configured for asset: USDC');
     });
 
     it('should throw error when asset.Wallet is missing', () => {
@@ -170,9 +182,12 @@ describe('RefillValidationService', () => {
         contractAddress: '0xcontract'
       };
 
-      expect(() => {
-        refillValidationService.validateHotWalletAddress(refillData, asset);
-      }).toThrow(/Hot wallet not configured for asset/);
+      const result = refillValidationService.validateHotWalletAddress(refillData, asset);
+      
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('HOT_WALLET_ADDRESS_VALIDATION_ERROR');
+      expect(result.error).toContain('Error while validating hot wallet address');
+      expect(result.data.details).toContain('Hot wallet not configured for asset: USDC');
     });
 
     it('should throw error when contract address is not configured in DB', () => {
@@ -188,9 +203,12 @@ describe('RefillValidationService', () => {
         }
       };
 
-      expect(() => {
-        refillValidationService.validateHotWalletAddress(refillData, asset);
-      }).toThrow(/Contract address not configured for asset/);
+      const result = refillValidationService.validateHotWalletAddress(refillData, asset);
+      
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('HOT_WALLET_ADDRESS_VALIDATION_ERROR');
+      expect(result.error).toContain('Error while validating hot wallet address');
+      expect(result.data.details).toContain('Contract address not configured for asset: USDC');
     });
 
     it('should handle case-insensitive wallet address comparison', () => {
@@ -208,7 +226,8 @@ describe('RefillValidationService', () => {
 
       const result = refillValidationService.validateHotWalletAddress(refillData, asset);
       
-      expect(result).toBe('0xwalletaddress');
+      expect(result.success).toBe(true);
+      expect(result.data.walletAddress).toBe('0xwalletaddress');
     });
   });
 

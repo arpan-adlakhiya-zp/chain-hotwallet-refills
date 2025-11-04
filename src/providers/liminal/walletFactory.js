@@ -42,40 +42,22 @@ class WalletFactory {
 
       // Check if this is a contract token (has contractAddress) or native token
       if (token.contractAddress && token.contractAddress !== 'native') {
-        // Contract token
-        let liminalTokenSymbol = token.symbol.toLowerCase();
-
-        // Special cases for specific tokens on specific chains
-        if (token.blockchainSymbol === 'bnb' && token.symbol.toLowerCase() === 'avax') {
-          liminalTokenSymbol = 'avaxb';
-        }
-        if (token.blockchainSymbol === 'bnb' && token.symbol.toLowerCase() === 'wrx') {
-          liminalTokenSymbol = 'wrxnew';
-        }
-
-        logger.debug(`Getting contract token wallet for: ${liminalTokenSymbol}, walletId: ${walletId}`);
+        logger.info(`Getting contract token wallet for: ${token.symbol}, walletId: ${walletId}`);
 
         wallet = await this.liminalJs
           .Coin(CoinsEnum[token.blockchainSymbol.toLowerCase()])
           .Token({
-            tokenName: liminalTokenSymbol,
+            tokenName: token.symbol,
             tokenAddress: token.contractAddress,
           })
           .Wallets()
           .Get({ walletId: walletId, allTokens: true });
       } else {
         // Native token
-        let coinSymbol = token.symbol.toLowerCase();
-        
-        // Special case for ATOM
-        if (token.symbol.toLowerCase() === 'atom') {
-          coinSymbol = (this.env === 'prod' || this.env === 'beta') ? "uatom" : "umlg";
-        }
-
-        logger.debug(`Getting native token wallet for coin: ${CoinsEnum[coinSymbol]}, walletId: ${walletId}`);
+        logger.info(`Getting native token wallet for coin: ${CoinsEnum[token.symbol]}, walletId: ${walletId}`);
 
         wallet = await this.liminalJs
-          .Coin(CoinsEnum[coinSymbol])
+          .Coin(CoinsEnum[token.symbol])
           .Wallets()
           .Get({ walletId: walletId });
       }
@@ -119,15 +101,24 @@ class WalletFactory {
    */
   async createTransferRequest(transferData) {
     try {
-      const { coldWalletId, hotWalletAddress, amount, asset, blockchain, externalTxId } = transferData;
+      const { coldWalletId, hotWalletAddress, amount, asset, blockchain, externalTxId, coldWalletConfig } = transferData;
       
       logger.debug(`Creating transfer request: ${amount} ${asset} from cold wallet ${coldWalletId} to ${hotWalletAddress}`);
+
+      let symbol = null;
+      if (coldWalletConfig && coldWalletConfig.liminal && coldWalletConfig.liminal.tokenSymbol) {
+        symbol = coldWalletConfig.liminal.tokenSymbol;
+      } else {
+        logger.warn(`Missing token symbol for asset ${asset} on blockchain ${blockchain} for Liminal, continuing with default asset symbol`);
+        // Keep default asset symbol
+        symbol = asset;
+      }
       
       const wallet = await this.getWallet({
-        symbol: asset,
+        symbol: symbol,
         blockchainSymbol: blockchain,
         contractAddress: transferData.contractAddress || null,
-        walletConfig: { liminal: { walletId: coldWalletId } }
+        walletConfig: coldWalletConfig
       });
       
       if (!wallet) {
@@ -135,7 +126,7 @@ class WalletFactory {
       }
       
       // Use provided externalTxId or generate one if not provided
-      const sequenceId = externalTxId || `refill_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const sequenceId = `${externalTxId}_${symbol}`;
       
       logger.debug("Creating transfer request using Liminal SDK SendMany method");
       
@@ -151,10 +142,10 @@ class WalletFactory {
             walletId: parseInt(coldWalletId),
             allToken: true,
             tokenOptions: transferData.contractAddress && transferData.contractAddress !== 'native' ? {
-              tokenName: asset,
+              tokenName: symbol,
               tokenAddress: transferData.contractAddress
             } : {
-              tokenName: asset,
+              tokenName: symbol,
               tokenAddress: walletAddress
             }
           },

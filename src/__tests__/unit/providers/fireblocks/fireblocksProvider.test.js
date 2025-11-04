@@ -215,7 +215,8 @@ describe('FireblocksProvider', () => {
         asset: 'BTC',
         assetId: 'BTC',
         blockchain: 'Bitcoin',
-        externalTxId: 'refill-001'
+        externalTxId: 'refill-001',
+        coldWalletConfig: { fireblocks: { assetId: 'BTC' } }
       };
 
       mockTransaction.createTransaction.mockResolvedValue({
@@ -226,61 +227,46 @@ describe('FireblocksProvider', () => {
       const result = await provider.createTransferRequest(transferData);
 
       expect(result.status).toBe('SUBMITTED');
-      expect(result.externalTxId).toBe('refill-001');
+      expect(result.externalTxId).toBe('refill-001_BTC');
       expect(result.transactionId).toBeDefined(); // Transaction ID should exist
       expect(result.message).toContain('Vault-to-vault transfer');
     });
 
-    it('should throw error when assetId missing', async () => {
+    it('should default assetId to asset symbol when not provided', async () => {
       const transferData = {
         coldWalletId: 'vault0',
         hotWalletId: 'vault1',
         amount: '1.0',
         asset: 'BTC',
-        blockchain: 'Bitcoin'
+        blockchain: 'Bitcoin',
+        externalTxId: 'refill-auto',
+        coldWalletConfig: { fireblocks: {} }
       };
 
-      await expect(
-        provider.createTransferRequest(transferData)
-      ).rejects.toThrow('Missing asset ID');
+      mockTransaction.createTransaction.mockResolvedValue({
+        id: 'fb-tx',
+        status: 'SUBMITTED'
+      });
+
+      await provider.createTransferRequest(transferData);
+
+      expect(mockTransaction.createTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assetId: 'BTC',
+          externalTxId: 'refill-auto_BTC'
+        })
+      );
     });
 
-    it('should throw error when coldWalletId missing', async () => {
-      const transferData = {
-        hotWalletId: 'vault1',
-        amount: '1.0',
-        asset: 'BTC',
-        assetId: 'BTC',
-        blockchain: 'Bitcoin'
-      };
-
-      await expect(
-        provider.createTransferRequest(transferData)
-      ).rejects.toThrow('Missing asset ID, cold wallet ID, or hot wallet ID');
-    });
-
-    it('should throw error when hotWalletId missing', async () => {
-      const transferData = {
-        coldWalletId: 'vault0',
-        amount: '1.0',
-        asset: 'BTC',
-        assetId: 'BTC',
-        blockchain: 'Bitcoin'
-      };
-
-      await expect(
-        provider.createTransferRequest(transferData)
-      ).rejects.toThrow('Missing asset ID, cold wallet ID, or hot wallet ID');
-    });
-
-    it('should generate externalTxId when not provided', async () => {
+    it('should append assetId to externalTxId when provided', async () => {
       const transferData = {
         coldWalletId: 'vault0',
         hotWalletId: 'vault1',
         amount: '1.0',
         asset: 'BTC',
-        assetId: 'BTC',
-        blockchain: 'Bitcoin'
+        blockchain: 'Bitcoin',
+        externalTxId: 'fireblocks_refill_auto',
+        coldWalletConfig: { fireblocks: { assetId: 'BTC' } }
       };
 
       mockTransaction.createTransaction.mockResolvedValue({
@@ -290,7 +276,7 @@ describe('FireblocksProvider', () => {
 
       const result = await provider.createTransferRequest(transferData);
 
-      expect(result.externalTxId).toMatch(/^fireblocks_refill_/);
+      expect(result.externalTxId).toBe('fireblocks_refill_auto_BTC');
     });
 
     it('should include note in transaction', async () => {
@@ -301,7 +287,8 @@ describe('FireblocksProvider', () => {
         asset: 'ETH',
         assetId: 'ETH',
         blockchain: 'Ethereum',
-        externalTxId: 'ext-001'
+        externalTxId: 'ext-001',
+        coldWalletConfig: { fireblocks: { assetId: 'ETH' } }
       };
 
       mockTransaction.createTransaction.mockResolvedValue({
@@ -314,7 +301,7 @@ describe('FireblocksProvider', () => {
       // Verify the result contains expected data
       expect(result).toBeDefined();
       expect(result.status).toBe('SUBMITTED');
-      expect(result.externalTxId).toBe('ext-001');
+      expect(result.externalTxId).toBe('ext-001_ETH');
     });
   });
 

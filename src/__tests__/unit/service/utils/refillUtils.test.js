@@ -88,7 +88,11 @@ describe('RefillUtils', () => {
       const validatedData = {
         asset: {
           sweepWalletConfig: {
-            liminal: { walletId: 'lim123' }
+            liminal: { 
+              walletId: 'lim123',
+              tokenSymbol: 'USDT',
+              version: '2'
+            }
           }
         }
       };
@@ -169,18 +173,66 @@ describe('RefillUtils', () => {
   });
 
   describe('getWalletConfig', () => {
-    it('should return success for valid Liminal config', () => {
+    it('should return success for valid Liminal config with all required fields', () => {
       const walletConfig = {
-        liminal: { walletId: 'wallet123' }
+        liminal: { 
+          walletId: 'wallet123',
+          tokenSymbol: 'USDT',
+          version: '2'
+        }
       };
 
       const result = refillUtils.getWalletConfig('liminal', walletConfig);
 
       expect(result.success).toBe(true);
       expect(result.data.walletConfig.liminal.walletId).toBe('wallet123');
+      expect(result.data.walletConfig.liminal.tokenSymbol).toBe('USDT');
+      expect(result.data.walletConfig.liminal.version).toBe('2');
     });
 
     it('should return error for missing Liminal walletId', () => {
+      const walletConfig = {
+        liminal: {
+          tokenSymbol: 'USDT',
+          version: '2'
+        }
+      };
+
+      const result = refillUtils.getWalletConfig('liminal', walletConfig);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('INVALID_LIMINAL_COLD_WALLET_CONFIGURATION');
+    });
+
+    it('should return error for missing Liminal tokenSymbol', () => {
+      const walletConfig = {
+        liminal: {
+          walletId: 'wallet123',
+          version: '2'
+        }
+      };
+
+      const result = refillUtils.getWalletConfig('liminal', walletConfig);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('INVALID_LIMINAL_COLD_WALLET_CONFIGURATION');
+    });
+
+    it('should return error for missing Liminal version', () => {
+      const walletConfig = {
+        liminal: {
+          walletId: 'wallet123',
+          tokenSymbol: 'USDT'
+        }
+      };
+
+      const result = refillUtils.getWalletConfig('liminal', walletConfig);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('INVALID_LIMINAL_COLD_WALLET_CONFIGURATION');
+    });
+
+    it('should return error for empty Liminal config', () => {
       const walletConfig = {
         liminal: {}
       };
@@ -188,7 +240,7 @@ describe('RefillUtils', () => {
       const result = refillUtils.getWalletConfig('liminal', walletConfig);
 
       expect(result.success).toBe(false);
-      expect(result.code).toBe('NO_LIMINAL_COLD_WALLET_CONFIGURED');
+      expect(result.code).toBe('INVALID_LIMINAL_COLD_WALLET_CONFIGURATION');
     });
 
     it('should return success for valid Fireblocks config', () => {
@@ -211,7 +263,7 @@ describe('RefillUtils', () => {
       const result = refillUtils.getWalletConfig('fireblocks', walletConfig);
 
       expect(result.success).toBe(false);
-      expect(result.code).toBe('NO_FIREBLOCKS_COLD_WALLET_CONFIGURED');
+      expect(result.code).toBe('INVALID_FIREBLOCKS_COLD_WALLET_CONFIGURATION');
     });
 
     it('should return error for unsupported provider', () => {

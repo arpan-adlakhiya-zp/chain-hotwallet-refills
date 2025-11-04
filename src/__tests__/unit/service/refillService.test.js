@@ -216,15 +216,15 @@ describe('RefillService', () => {
 
     it('should include externalTxId for idempotency', async () => {
       mockProvider.createTransferRequest.mockResolvedValue({
-        id: 'fb-123',
-        transactionId: 'fb-123',
-        status: 'SUBMITTED'
+        success: true,
+        data: {}
       });
 
       await refillService.initiateRefill(validatedData, mockProvider, 'REQ999');
 
       const callArgs = mockProvider.createTransferRequest.mock.calls[0][0];
-      expect(callArgs.externalTxId).toBe('REQ999');
+      expect(callArgs.externalTxId).toBe('REQ999_refill');
+      expect(callArgs.coldWalletConfig).toEqual(validatedData.asset.sweepWalletConfig);
     });
 
     it('should return success with transfer details', async () => {
