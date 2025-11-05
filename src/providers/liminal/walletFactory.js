@@ -42,27 +42,27 @@ class WalletFactory {
 
       // Check if this is a contract token (has contractAddress) or native token
       if (token.contractAddress && token.contractAddress !== 'native') {
-        logger.info(`Getting contract token wallet for: ${token.symbol}, walletId: ${walletId}`);
+        logger.info(`Getting contract token wallet for: ${token.symbol.toLowerCase()}, walletId: ${walletId}`);
 
         wallet = await this.liminalJs
           .Coin(CoinsEnum[token.blockchainSymbol.toLowerCase()])
           .Token({
-            tokenName: token.symbol,
+            tokenName: token.symbol.toLowerCase(),
             tokenAddress: token.contractAddress,
           })
           .Wallets()
           .Get({ walletId: walletId, allTokens: true });
       } else {
         // Native token
-        logger.info(`Getting native token wallet for coin: ${CoinsEnum[token.symbol]}, walletId: ${walletId}`);
+        logger.info(`Getting native token wallet for coin: ${CoinsEnum[token.symbol.toLowerCase()]}, walletId: ${walletId}`);
 
         wallet = await this.liminalJs
-          .Coin(CoinsEnum[token.symbol])
+          .Coin(CoinsEnum[token.symbol.toLowerCase()])
           .Wallets()
           .Get({ walletId: walletId });
       }
     } catch (error) {
-      logger.error("Error getting wallet:", JSON.stringify(error, null, 2));
+      logger.error(`Error getting wallet: ${error.message}`);
       throw error;
     }
     return wallet;
@@ -88,7 +88,7 @@ class WalletFactory {
       return balance.spendableBalanceInLowerDenom;
       
     } catch (error) {
-      logger.error("Error getting token balance:", error);
+      logger.error(`Error getting token balance: ${error.message}`);
       throw error;
     }
   }

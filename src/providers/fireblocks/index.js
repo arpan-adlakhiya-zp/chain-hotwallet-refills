@@ -127,11 +127,7 @@ class FireblocksProvider extends AbstractProvider {
 
       logger.info(`Sending vault-to-vault transfer request to Fireblocks:`, transactionData);
 
-      // const result = await this.transaction.createTransaction(transactionData);
-      const result = {
-        id: '6d15dba9-d3c1-4eae-a7d1-edc3f80255ad',
-        status: 'SUBMITTED'
-      };
+      const result = await this.transaction.createTransaction(transactionData);
       
       logger.info(`Vault-to-vault transfer request created successfully with Fireblocks`, result);
       

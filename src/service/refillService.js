@@ -48,6 +48,13 @@ class RefillService {
    */
   async processRefillRequestService(refillData) {
     try {
+      // Validate required fields before processing the refill request
+      const fieldValidation = refillValidationService.validateRequiredFields(refillData);
+      if (!fieldValidation.success) {
+        logger.error(`Missing required fields in refill request: ${fieldValidation.error}, result: ${JSON.stringify(fieldValidation, null, 2)}`);
+        return fieldValidation;
+      }
+
       // Ensure service is initialized
       await this.initialize();
 
@@ -56,30 +63,30 @@ class RefillService {
 
       logger.debug(`Refill data: ${JSON.stringify(refillData, null, 2)}`);
 
-      // Get the provider for this token
-      const provider = await providerService.getTokenProvider(
-        refillData.chain_name,
-        refillData.asset_symbol
-      );
+      // // Get the provider for this token
+      // const provider = await providerService.getTokenProvider(
+      //   refillData.chain_name,
+      //   refillData.asset_symbol
+      // );
 
-      if (!provider) {
-        logger.error(`No provider available for blockchain ${refillData.chain_name} and asset ${refillData.asset_symbol}`);
-        return {
-          success: false,
-          error: 'No provider available for this blockchain and asset combination',
-          code: 'NO_PROVIDER_AVAILABLE',
-          data: {
-            chainName: refillData.chain_name,
-            assetSymbol: refillData.asset_symbol,
-            availableProviders: Array.from(this.providers.keys())
-          }
-        };
-      }
+      // if (!provider) {
+      //   logger.error(`No provider available for blockchain ${refillData.chain_name} and asset ${refillData.asset_symbol}`);
+      //   return {
+      //     success: false,
+      //     error: 'No provider available for this blockchain and asset combination',
+      //     code: 'NO_PROVIDER_AVAILABLE',
+      //     data: {
+      //       chainName: refillData.chain_name,
+      //       assetSymbol: refillData.asset_symbol,
+      //       availableProviders: Array.from(this.providers.keys())
+      //     }
+      //   };
+      // }
 
-      const providerName = provider.constructor.getProviderName();
+      // const providerName = provider.constructor.getProviderName();
 
       // Validate the refill request
-      refillData.provider = provider; // Pass provider to validation
+      // refillData.provider = provider; // Pass provider to validation
       const validationResult = await refillValidationService.validateRefillRequest(refillData);
       if (!validationResult.success) {
         logger.error(`Refill request validation failed: ${validationResult.error}, result: ${JSON.stringify(validationResult, null, 2)}`);
@@ -91,9 +98,12 @@ class RefillService {
         };
       }
 
-      const validatedData = validationResult.data;
+      const validatedData = validationResult.data.details;
       logger.debug(`Validated Data: ${JSON.stringify(validatedData, null, 2)}`);
       logger.info(`Refill request validated successfully for wallet: ${refillData.wallet_address}, request ID: ${refillRequestId}`);
+      
+      const provider = validationResult.data.provider;
+      const providerName = provider.constructor.getProviderName();
 
       // Create initial transaction record on successful validation
       const transactionData = {

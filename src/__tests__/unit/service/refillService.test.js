@@ -23,6 +23,14 @@ describe('RefillService', () => {
     );
     providerService.getTokenProvider = jest.fn().mockResolvedValue(mockProvider);
     
+    // Mock field validation by default (can be overridden in individual tests)
+    refillValidationService.validateRequiredFields = jest.fn().mockReturnValue({
+      success: true,
+      error: null,
+      code: null,
+      data: { missingFields: [] }
+    });
+    
     jest.clearAllMocks();
   });
 
@@ -69,7 +77,10 @@ describe('RefillService', () => {
 
       refillValidationService.validateRefillRequest.mockResolvedValue({
         success: true,
-        data: validatedData
+        data: {
+          provider: mockProvider,
+          details: validatedData
+        }
       });
 
       refillTransactionService.createRefillTransaction.mockResolvedValue({
@@ -107,7 +118,15 @@ describe('RefillService', () => {
     });
 
     it('should return error when provider not available', async () => {
-      providerService.getTokenProvider.mockResolvedValue(null);
+      refillValidationService.validateRefillRequest.mockResolvedValue({
+        success: false,
+        error: 'No provider available for this blockchain and asset combination',
+        code: 'NO_PROVIDER_AVAILABLE',
+        data: {
+          chainName: 'Bitcoin',
+          assetSymbol: 'BTC'
+        }
+      });
 
       const result = await refillService.processRefillRequestService(mockRefillData);
 
@@ -119,7 +138,10 @@ describe('RefillService', () => {
       refillValidationService.validateRefillRequest.mockResolvedValue({
         success: false,
         error: 'Validation failed',
-        code: 'VALIDATION_ERROR'
+        code: 'VALIDATION_ERROR',
+        data: {
+          details: 'Validation error details'
+        }
       });
 
       const result = await refillService.processRefillRequestService(mockRefillData);
@@ -132,10 +154,13 @@ describe('RefillService', () => {
       refillValidationService.validateRefillRequest.mockResolvedValue({
         success: true,
         data: {
-          wallet: { id: 1 },
-          asset: { id: 1, symbol: 'BTC' },
-          blockchain: { id: 1 },
-          refillAmountAtomic: '100000000'
+          provider: mockProvider,
+          details: {
+            wallet: { id: 1 },
+            asset: { id: 1, symbol: 'BTC', name: 'Bitcoin' },
+            blockchain: { id: 1, name: 'Bitcoin' },
+            refillAmountAtomic: '100000000'
+          }
         }
       });
 
@@ -155,10 +180,13 @@ describe('RefillService', () => {
       refillValidationService.validateRefillRequest.mockResolvedValue({
         success: true,
         data: {
-          wallet: { id: 1, address: '0x123' },
-          asset: { id: 1, symbol: 'BTC', decimals: 8, sweepWalletConfig: { fireblocks: { vaultId: '0', assetId: 'BTC' } }, hotWalletConfig: { fireblocks: { vaultId: '1' } } },
-          blockchain: { id: 1, symbol: 'BTC' },
-          refillAmountAtomic: '100000000'
+          provider: mockProvider,
+          details: {
+            wallet: { id: 1, address: '0x123' },
+            asset: { id: 1, symbol: 'BTC', decimals: 8, refillSweepWallet: '0xcold', contractAddress: 'native', sweepWalletConfig: { fireblocks: { vaultId: '0', assetId: 'BTC' } }, hotWalletConfig: { fireblocks: { vaultId: '1' } } },
+            blockchain: { id: 1, symbol: 'BTC', name: 'Bitcoin' },
+            refillAmountAtomic: '100000000'
+          }
         }
       });
 

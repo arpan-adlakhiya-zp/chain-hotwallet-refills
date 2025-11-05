@@ -2,6 +2,7 @@ const BigNumber = require('bignumber.js');
 const logger = require('../middleware/logger')('refillValidationService');
 const databaseService = require('./chainDb');
 const refillUtils = require('./utils/utils');
+const providerService = require('./providerService');
 
 /**
  * Refill Request Validation Service
@@ -26,17 +27,7 @@ class RefillValidationService {
     try {
       logger.info(`Validating refill request for wallet: ${refillData.wallet_address}`);
 
-      // Validate required fields
-      const fieldValidation = this.validateRequiredFields(refillData);
-      if (!fieldValidation.success) {
-        return {
-          success: false,
-          error: fieldValidation.error,
-          code: fieldValidation.code,
-          data: fieldValidation.data
-        };
-      }
-
+      logger.info(`Validating chain details for ${refillData.chain_name}`);
       // Validate blockchain exists and is active
       const blockchain = await databaseService.getBlockchainByName(refillData.chain_name.toLowerCase());
       if (!blockchain) {
@@ -50,24 +41,28 @@ class RefillValidationService {
         };
       }
 
+      logger.info(`Validating asset details for ${refillData.asset_symbol}`);
       // Validate asset exists and is active
       const assetValidation = await this.validateAsset(refillData.asset_symbol.toUpperCase(), blockchain.id);
       if (!assetValidation.success) {
         return assetValidation;
       }
 
+      logger.info(`Validating pending refill for asset ${refillData.asset_symbol}`);
       // Check if asset already has a pending refill (prevent duplicate in-flight refills)
       const pendingRefillCheck = await this.validateNoPendingRefill(assetValidation.data.asset.id);
       if (!pendingRefillCheck.success) {
         return pendingRefillCheck;
       }
 
+      logger.info(`Validating hot wallet address for ${refillData.wallet_address}`);
       // Validate and determine the correct hot wallet address based on token type
       const hotWalletAddressValidation = this.validateHotWalletAddress(refillData, assetValidation.data.asset);
       if (!hotWalletAddressValidation.success) {
         return hotWalletAddressValidation;
       }
 
+      logger.info(`Validating refill sweep wallet for ${refillData.refill_sweep_wallet}`);
       // Validate refill_sweep_wallet matches the asset's configured sweep wallet
       const sweepWalletValidation = await this.validateRefillSweepWallet(
         refillData.refill_sweep_wallet,
@@ -77,17 +72,27 @@ class RefillValidationService {
         return sweepWalletValidation;
       }
 
-      // Get provider instance
-      const provider = refillData.provider;
+      logger.info(`Validating and fetching provider for ${refillData.chain_name} and ${refillData.asset_symbol}`);
+      // Get provider instance for the asset
+      const provider = await providerService.getTokenProvider(
+        refillData.chain_name,
+        refillData.asset_symbol
+      );
       if (!provider) {
+        logger.error(`No provider available for blockchain ${refillData.chain_name} and asset ${refillData.asset_symbol}`);
         return {
           success: false,
-          error: 'Provider instance not available for balance validation',
-          code: 'PROVIDER_NOT_AVAILABLE',
-          data: null
+          error: 'No provider available for this blockchain and asset combination',
+          code: 'NO_PROVIDER_AVAILABLE',
+          data: {
+            chainName: refillData.chain_name,
+            assetSymbol: refillData.asset_symbol,
+            availableProviders: Array.from(this.providers.keys())
+          }
         };
       }
 
+      logger.info(`Validating cold wallet balance for ${refillData.asset_symbol}`);
       // Validate cold wallet has sufficient balance
       const coldWalletValidation = await this.validateColdWalletBalance(
         assetValidation.data.asset,
@@ -98,6 +103,7 @@ class RefillValidationService {
         return coldWalletValidation;
       }
 
+      logger.info(`Validating if hot wallet needs refill for ${refillData.wallet_address}`);
       // Check if hot wallet needs refill
       const hotWalletValidation = await this.validateHotWalletNeedsRefill(
         hotWalletAddressValidation.data.walletAddress,
@@ -116,37 +122,40 @@ class RefillValidationService {
         error: null,
         code: null,
         data: {
-          wallet: {
-            id: hotWalletValidation.data.wallet.id,
-            address: hotWalletValidation.data.wallet.address,
-            name: hotWalletValidation.data.wallet.name,
-            walletType: hotWalletValidation.data.wallet.walletType,
-            hotWalletConfig: hotWalletValidation.data.wallet.hotWalletConfig
-          },
-          asset: {
-            id: assetValidation.data.asset.id,
-            symbol: assetValidation.data.asset.symbol,
-            name: assetValidation.data.asset.name,
-            contractAddress: assetValidation.data.asset.contractAddress,
-            decimals: assetValidation.data.asset.decimals,
-            refillSweepWallet: assetValidation.data.asset.refillSweepWallet,
-            sweepWalletConfig: assetValidation.data.asset.sweepWalletConfig,
-            hotWalletConfig: assetValidation.data.asset.hotWalletConfig,
-            refillTargetBalanceAtomic: assetValidation.data.asset.refillTargetBalanceAtomic,
-            refillTriggerThresholdAtomic: assetValidation.data.asset.refillTriggerThresholdAtomic
-          },
-          blockchain: {
-            id: blockchain.id,
-            name: blockchain.name,
-            symbol: blockchain.symbol,
-            chainId: blockchain.chainId,
-            nativeAssetSymbol: blockchain.nativeAssetSymbol
-          },
-          coldWallet: coldWalletValidation.data,
-          hotWalletBalance: hotWalletValidation.data.currentBalance,
-          hotWalletTargetBalance: hotWalletValidation.data.targetBalance,
-          hotWalletTriggerThreshold: hotWalletValidation.data.triggerThreshold,
-          refillAmountAtomic: hotWalletValidation.data.refillAmountAtomic
+          provider: provider,
+          details: {
+            wallet: {
+              id: hotWalletValidation.data.wallet.id,
+              address: hotWalletValidation.data.wallet.address,
+              name: hotWalletValidation.data.wallet.name,
+              walletType: hotWalletValidation.data.wallet.walletType,
+              hotWalletConfig: hotWalletValidation.data.wallet.hotWalletConfig
+            },
+            asset: {
+              id: assetValidation.data.asset.id,
+              symbol: assetValidation.data.asset.symbol,
+              name: assetValidation.data.asset.name,
+              contractAddress: assetValidation.data.asset.contractAddress,
+              decimals: assetValidation.data.asset.decimals,
+              refillSweepWallet: assetValidation.data.asset.refillSweepWallet,
+              sweepWalletConfig: assetValidation.data.asset.sweepWalletConfig,
+              hotWalletConfig: assetValidation.data.asset.hotWalletConfig,
+              refillTargetBalanceAtomic: assetValidation.data.asset.refillTargetBalanceAtomic,
+              refillTriggerThresholdAtomic: assetValidation.data.asset.refillTriggerThresholdAtomic
+            },
+            blockchain: {
+              id: blockchain.id,
+              name: blockchain.name,
+              symbol: blockchain.symbol,
+              chainId: blockchain.chainId,
+              nativeAssetSymbol: blockchain.nativeAssetSymbol
+            },
+            coldWallet: coldWalletValidation.data,
+            hotWalletBalance: hotWalletValidation.data.currentBalance,
+            hotWalletTargetBalance: hotWalletValidation.data.targetBalance,
+            hotWalletTriggerThreshold: hotWalletValidation.data.triggerThreshold,
+            refillAmountAtomic: hotWalletValidation.data.refillAmountAtomic
+          }
         }
       };
     } catch (error) {
@@ -442,7 +451,7 @@ class RefillValidationService {
       const tokenInfo = {
         symbol: asset.symbol,
         blockchainSymbol: asset.Blockchain.symbol,
-        contractAddress: asset.contractAddress === 'native' ? null : asset.contractAddress,
+        contractAddress: asset.contractAddress,
         decimalPlaces: asset.decimals,
         walletConfig: walletConfig
       };
