@@ -4,9 +4,9 @@ const logger = require("../middleware/logger")("refillController");
 
 async function processRefillRequestController(req, res, next) {
   try {
-    logger.info(`Processing refill request for wallet: ${req.body?.wallet_address}`);
+    const requestData = req.verifiedData;
 
-    const result = await refillService.processRefillRequestService(req.body);
+    const result = await refillService.processRefillRequestService(requestData);
 
     if (result.success) {
       res.status(200).json(result);
@@ -31,7 +31,7 @@ async function processRefillRequestController(req, res, next) {
 
 async function checkTransactionStatusController(req, res, next) {
   try {
-    const { refill_request_id } = req.params;
+    const { refill_request_id } = req.verifiedData;
 
     if (!refill_request_id) {
       return res.status(400).json({

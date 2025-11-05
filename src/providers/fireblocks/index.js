@@ -98,7 +98,7 @@ class FireblocksProvider extends AbstractProvider {
       if (coldWalletConfig && coldWalletConfig.fireblocks && coldWalletConfig.fireblocks.assetId) {
         assetId = coldWalletConfig.fireblocks.assetId;
       } else {
-        logger.warn(`Missing asset ID for asset ${asset} on blockchain ${blockchain} for Fireblocks, continuing with default asset symbol`);
+        logger.info(`Missing asset ID for asset ${asset} on blockchain ${blockchain} for Fireblocks, continuing with default asset symbol`);
         // Keep default asset symbol
         assetId = asset;
       }

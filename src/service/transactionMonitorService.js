@@ -17,7 +17,7 @@ class TransactionMonitorService {
    */
   start(intervalMs = 30000) {
     if (this.isRunning) {
-      logger.warn('Transaction monitor is already running');
+      logger.info('Transaction monitor is already running');
       return;
     }
 
@@ -130,7 +130,7 @@ class TransactionMonitorService {
           logger.debug(`Status unchanged for ${refillRequestId}: ${oldStatus}`);
         }
       } else {
-        logger.warn(`Failed to check status for ${refillRequestId}: ${result.error}`);
+        logger.info(`Failed to check status for ${refillRequestId}: ${result.error}`);
       }
 
     } catch (error) {

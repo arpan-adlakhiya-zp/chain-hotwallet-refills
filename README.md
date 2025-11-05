@@ -23,6 +23,16 @@ Requires two config files in root:
 
 See `src/config/schema.js` for full schema.
 
+**Configuration:**
+```json
+{
+  "authEnabled": true,
+  "authPublicKey": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+}
+```
+
+Set `authEnabled: false` to disable authentication (testing only)
+
 ## API Endpoints
 
 | Method | Endpoint | Description |

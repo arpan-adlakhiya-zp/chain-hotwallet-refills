@@ -109,7 +109,7 @@ class WalletFactory {
       if (coldWalletConfig && coldWalletConfig.liminal && coldWalletConfig.liminal.tokenSymbol) {
         symbol = coldWalletConfig.liminal.tokenSymbol;
       } else {
-        logger.warn(`Missing token symbol for asset ${asset} on blockchain ${blockchain} for Liminal, continuing with default asset symbol`);
+        logger.info(`Missing token symbol for asset ${asset} on blockchain ${blockchain} for Liminal, continuing with default asset symbol`);
         // Keep default asset symbol
         symbol = asset;
       }

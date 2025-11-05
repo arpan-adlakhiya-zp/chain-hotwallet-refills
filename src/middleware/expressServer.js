@@ -14,7 +14,17 @@ class ExpressServer {
 
   setupMiddleware() {
     this.app.use(cors());
-    this.app.use(express.json());
+    
+    // Capture raw body for JWT authentication (for text/plain, application/jwt content types)
+    this.app.use(express.text({ type: ['text/plain', 'application/jwt'] }));
+    
+    // Capture raw body during JSON parsing (using verify callback)
+    this.app.use(express.json({
+      verify: (req, res, buf, encoding) => {
+        // Store raw body as string for JWT verification
+        req.rawBody = buf.toString(encoding || 'utf8');
+      }
+    }));
     this.app.use(express.urlencoded({ extended: false }));
     
     // routes API

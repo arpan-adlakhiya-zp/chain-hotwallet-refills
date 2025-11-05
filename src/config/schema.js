@@ -7,6 +7,21 @@ const schema = {
                 type: 'number',
                 default: 3000
             },
+            authEnabled: {
+                type: 'boolean',
+                default: true
+            },
+            authPublicKey: {
+                type: 'string'
+            },
+            cronEnabled: {
+                type: 'boolean',
+                default: true
+            },
+            cronInterval: {
+                type: 'number',
+                default: 30000
+            },
             logConfig: {
                 type: 'object',
                 properties: {
@@ -66,7 +81,7 @@ const schema = {
                 }
             }
         },
-        required: ['serverPort', 'logConfig', 'providers']
+        required: ['serverPort', 'logConfig', 'providers', 'authEnabled', 'cronEnabled']
     },
     secret: {
         type: 'object',

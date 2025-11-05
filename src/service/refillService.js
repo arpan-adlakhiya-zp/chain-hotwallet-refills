@@ -156,7 +156,8 @@ class RefillService {
       // Update transaction record on success
       await refillTransactionService.updateRefillTransaction(refillRequestId, {
         status: txnStatus,
-        providerTxId: transactionResult.data.transferId
+        providerTxId: transactionResult.data.transferId,
+        providerStatus: transactionResult.data.status
       });
 
       logger.info(`Refill request initiated successfully. Transaction ID: ${transactionResult.data.transferId}, Provider: ${providerName}`);

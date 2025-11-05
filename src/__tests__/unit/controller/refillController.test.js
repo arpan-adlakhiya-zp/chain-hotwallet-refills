@@ -23,7 +23,7 @@ describe('RefillController', () => {
 
   describe('processRefillRequestController', () => {
     it('should return 200 when refill request succeeds', async () => {
-      mockReq.body = {
+      mockReq.verifiedData = {
         wallet_address: '0x123',
         refill_request_id: 'REQ001'
       };
@@ -46,7 +46,7 @@ describe('RefillController', () => {
     });
 
     it('should return 400 when refill request fails validation', async () => {
-      mockReq.body = { wallet_address: '0x123' };
+      mockReq.verifiedData = { wallet_address: '0x123' };
 
       const mockResult = {
         success: false,
@@ -63,7 +63,7 @@ describe('RefillController', () => {
     });
 
     it('should return 500 on internal server error', async () => {
-      mockReq.body = { wallet_address: '0x123' };
+      mockReq.verifiedData = { wallet_address: '0x123' };
 
       refillService.processRefillRequestService.mockRejectedValue(
         new Error('Internal error')
@@ -81,8 +81,11 @@ describe('RefillController', () => {
       );
     });
 
-    it('should log wallet address from request', async () => {
-      mockReq.body = { wallet_address: '0xtest123' };
+    it('should use verifiedData from authentication middleware', async () => {
+      mockReq.verifiedData = {
+        refill_request_id: 'REQ123',
+        wallet_address: '0xtest123'
+      };
 
       refillService.processRefillRequestService.mockResolvedValue({
         success: true,
@@ -91,11 +94,11 @@ describe('RefillController', () => {
 
       await processRefillRequestController(mockReq, mockRes, mockNext);
 
-      expect(refillService.processRefillRequestService).toHaveBeenCalledWith(mockReq.body);
+      expect(refillService.processRefillRequestService).toHaveBeenCalledWith(mockReq.verifiedData);
     });
 
     it('should return 409 when refill already in progress for asset', async () => {
-      mockReq.body = {
+      mockReq.verifiedData = {
         wallet_address: '0x123',
         asset_symbol: 'BTC'
       };
@@ -121,7 +124,7 @@ describe('RefillController', () => {
 
   describe('checkTransactionStatusController', () => {
     it('should return 200 when transaction found', async () => {
-      mockReq.params = { refill_request_id: 'REQ001' };
+      mockReq.verifiedData = { refill_request_id: 'REQ001' };
 
       const mockResult = {
         success: true,
@@ -141,7 +144,7 @@ describe('RefillController', () => {
     });
 
     it('should return 404 when transaction not found', async () => {
-      mockReq.params = { refill_request_id: 'NOTFOUND' };
+      mockReq.verifiedData = { refill_request_id: 'NOTFOUND' };
 
       const mockResult = {
         success: false,
@@ -158,7 +161,7 @@ describe('RefillController', () => {
     });
 
     it('should return 400 when refill_request_id missing', async () => {
-      mockReq.params = {};
+      mockReq.verifiedData = {};
 
       await checkTransactionStatusController(mockReq, mockRes, mockNext);
 
@@ -174,7 +177,7 @@ describe('RefillController', () => {
     });
 
     it('should return 500 on internal server error', async () => {
-      mockReq.params = { refill_request_id: 'REQ001' };
+      mockReq.verifiedData = { refill_request_id: 'REQ001' };
 
       refillTransactionService.getTransactionStatusFromDB.mockRejectedValue(
         new Error('Database error')
@@ -193,7 +196,7 @@ describe('RefillController', () => {
     });
 
     it('should use DB-only check (no provider call)', async () => {
-      mockReq.params = { refill_request_id: 'REQ001' };
+      mockReq.verifiedData = { refill_request_id: 'REQ001' };
 
       refillTransactionService.getTransactionStatusFromDB.mockResolvedValue({
         success: true,

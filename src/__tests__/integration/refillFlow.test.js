@@ -1,3 +1,45 @@
+// Mock authentication middleware to pass through for tests
+jest.mock('../../middleware/authentication', () => ({
+  authenticate: (req, res, next) => {
+    // For POST requests, use body
+    // For GET requests, extract refill_request_id from URL parameter (simulating JWT decode)
+    if (req.method === 'GET' && req.params && req.params.refill_request_id) {
+      // Simulate decoding JWT - extract refill_request_id from URL
+      req.verifiedData = { refill_request_id: req.params.refill_request_id };
+    } else {
+      req.verifiedData = req.body;
+    }
+    next();
+  }
+}));
+
+// Mock config for database
+jest.mock('../../config', () => ({
+  get: jest.fn(),
+  getSecret: jest.fn((key) => {
+    if (key === 'chainDb') {
+      return {
+        host: 'localhost',
+        port: 5432,
+        user: 'test',
+        password: 'test',
+        name: 'testdb'
+      };
+    }
+    return null;
+  }),
+  getAllConfig: jest.fn()
+}));
+
+// Mock other services
+jest.mock('../../service/refillService');
+jest.mock('../../service/refillValidationService');
+jest.mock('../../service/refillTransactionService');
+jest.mock('../../service/providerService');
+jest.mock('../../service/chainDb');
+jest.mock('../../middleware/logger');
+
+// Now import modules
 const request = require('supertest');
 const express = require('express');
 const { router } = require('../../routes/routes');
@@ -6,13 +48,6 @@ const refillValidationService = require('../../service/refillValidationService')
 const refillTransactionService = require('../../service/refillTransactionService');
 const providerService = require('../../service/providerService');
 const databaseService = require('../../service/chainDb');
-
-jest.mock('../../service/refillService');
-jest.mock('../../service/refillValidationService');
-jest.mock('../../service/refillTransactionService');
-jest.mock('../../service/providerService');
-jest.mock('../../service/chainDb');
-jest.mock('../../middleware/logger');
 
 describe('Refill Flow Integration Tests', () => {
   let app;
