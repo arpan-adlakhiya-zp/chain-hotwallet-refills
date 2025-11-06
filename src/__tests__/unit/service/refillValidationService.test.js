@@ -556,5 +556,172 @@ describe('RefillValidationService', () => {
       expect(result.data.details).toContain('Database connection failed');
     });
   });
+
+  describe('validateCooldownPeriod', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should allow refill when no cooldown period configured', async () => {
+      const asset = {
+        id: 1,
+        symbol: 'BTC',
+        refillCooldownPeriod: null
+      };
+
+      const result = await refillValidationService.validateCooldownPeriod(asset);
+
+      expect(result.success).toBe(true);
+      expect(databaseService.getLastSuccessfulRefillByAssetId).not.toHaveBeenCalled();
+    });
+
+    it('should allow refill when cooldown period is zero', async () => {
+      const asset = {
+        id: 1,
+        symbol: 'BTC',
+        refillCooldownPeriod: 0
+      };
+
+      const result = await refillValidationService.validateCooldownPeriod(asset);
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should allow refill when no previous successful refill exists', async () => {
+      const asset = {
+        id: 1,
+        symbol: 'BTC',
+        refillCooldownPeriod: 7200  // 2 hours
+      };
+
+      databaseService.getLastSuccessfulRefillByAssetId.mockResolvedValue(null);
+
+      const result = await refillValidationService.validateCooldownPeriod(asset);
+
+      expect(result.success).toBe(true);
+      expect(databaseService.getLastSuccessfulRefillByAssetId).toHaveBeenCalledWith(1);
+    });
+
+    it('should deny refill when cooldown period is still active', async () => {
+      const asset = {
+        id: 1,
+        symbol: 'BTC',
+        refillCooldownPeriod: 7200  // 2 hours
+      };
+
+      // Last refill was 1 hour ago
+      const oneHourAgo = new Date(Date.now() - 3600 * 1000);
+      const lastRefill = {
+        refillRequestId: 'REQ_OLD',
+        assetId: 1,
+        status: 'COMPLETED',
+        updatedAt: oneHourAgo.toISOString()
+      };
+
+      databaseService.getLastSuccessfulRefillByAssetId.mockResolvedValue(lastRefill);
+
+      const result = await refillValidationService.validateCooldownPeriod(asset);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('COOLDOWN_PERIOD_ACTIVE');
+      expect(result.data.remainingCooldownSeconds).toBeGreaterThan(3500);  // ~1 hour remaining
+      expect(result.data.remainingCooldownSeconds).toBeLessThan(3700);
+      expect(result.data.lastRefillRequestId).toBe('REQ_OLD');
+      expect(result.data.cooldownPeriodSeconds).toBe(7200);
+    });
+
+    it('should allow refill when cooldown period has passed', async () => {
+      const asset = {
+        id: 1,
+        symbol: 'BTC',
+        refillCooldownPeriod: 3600  // 1 hour
+      };
+
+      // Last refill was 2 hours ago
+      const twoHoursAgo = new Date(Date.now() - 7200 * 1000);
+      const lastRefill = {
+        refillRequestId: 'REQ_OLD',
+        assetId: 1,
+        status: 'COMPLETED',
+        updatedAt: twoHoursAgo.toISOString()
+      };
+
+      databaseService.getLastSuccessfulRefillByAssetId.mockResolvedValue(lastRefill);
+
+      const result = await refillValidationService.validateCooldownPeriod(asset);
+
+      expect(result.success).toBe(true);
+      expect(result.data.timeSinceLastRefill).toBeGreaterThan(7100);
+      expect(result.data.lastRefillTime).toBeDefined();
+    });
+
+    it('should allow refill exactly when cooldown period expires', async () => {
+      const asset = {
+        id: 1,
+        symbol: 'BTC',
+        refillCooldownPeriod: 3600  // 1 hour
+      };
+
+      // Last refill was exactly 1 hour ago
+      const exactlyOneHourAgo = new Date(Date.now() - 3600 * 1000);
+      const lastRefill = {
+        refillRequestId: 'REQ_OLD',
+        assetId: 1,
+        status: 'COMPLETED',
+        updatedAt: exactlyOneHourAgo.toISOString()
+      };
+
+      databaseService.getLastSuccessfulRefillByAssetId.mockResolvedValue(lastRefill);
+
+      const result = await refillValidationService.validateCooldownPeriod(asset);
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should handle database errors gracefully', async () => {
+      const asset = {
+        id: 1,
+        symbol: 'BTC',
+        refillCooldownPeriod: 3600
+      };
+
+      databaseService.getLastSuccessfulRefillByAssetId.mockRejectedValue(
+        new Error('Database error')
+      );
+
+      const result = await refillValidationService.validateCooldownPeriod(asset);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('COOLDOWN_CHECK_ERROR');
+      expect(result.data.details).toContain('Database error');
+    });
+
+    it('should provide detailed error message with remaining time', async () => {
+      const asset = {
+        id: 1,
+        symbol: 'BTC',
+        refillCooldownPeriod: 1800  // 30 minutes
+      };
+
+      // Last refill was 10 minutes ago
+      const tenMinutesAgo = new Date(Date.now() - 600 * 1000);
+      const lastRefill = {
+        refillRequestId: 'REQ_OLD',
+        assetId: 1,
+        status: 'COMPLETED',
+        updatedAt: tenMinutesAgo.toISOString()
+      };
+
+      databaseService.getLastSuccessfulRefillByAssetId.mockResolvedValue(lastRefill);
+
+      const result = await refillValidationService.validateCooldownPeriod(asset);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Refill cooldown period active');
+      expect(result.error).toContain('seconds before requesting another refill');
+      expect(result.data.remainingCooldownSeconds).toBeGreaterThan(1100);  // ~20 minutes remaining
+      expect(result.data.remainingCooldownSeconds).toBeLessThan(1300);
+    });
+  });
 });
 

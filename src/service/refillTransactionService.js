@@ -26,7 +26,22 @@ class RefillTransactionService {
           error: `Refill transaction already exists for request: ${transactionData.refillRequestId}`,
           code: 'TRANSACTION_EXISTS',
           data: {
-            transaction: existingTransaction,
+            transaction: {
+              refillRequestId: existingTransaction.refillRequestId,
+              status: existingTransaction.status,
+              amountAtomic: existingTransaction.amountAtomic,
+              amount: existingTransaction.amount,
+              tokenSymbol: existingTransaction.tokenSymbol,
+              chainName: existingTransaction.chainName,
+              assetId: existingTransaction.assetId,
+              providerStatus: existingTransaction.providerStatus,
+              provider: existingTransaction.provider,
+              providerTxId: existingTransaction.providerTxId,
+              txHash: existingTransaction.txHash,
+              message: existingTransaction.message,
+              createdAt: existingTransaction.createdAt,
+              updatedAt: existingTransaction.updatedAt
+            },
             message: 'Transaction already exists'
           }
         };
@@ -223,6 +238,12 @@ class RefillTransactionService {
         data: {
           refillRequestId: refillRequestId,
           status: transaction.status,
+          amountAtomic: transaction.amountAtomic,
+          amount: transaction.amount,
+          tokenSymbol: transaction.tokenSymbol,
+          chainName: transaction.chainName,
+          assetId: transaction.assetId,
+          providerStatus: transaction.providerStatus,
           provider: transaction.provider,
           providerTxId: transaction.providerTxId,
           txHash: transaction.txHash,

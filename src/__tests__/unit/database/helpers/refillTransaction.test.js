@@ -118,16 +118,11 @@ describe('RefillTransaction Helper', () => {
   });
 
   describe('getRefillTransactionByRequestId', () => {
-    it('should fetch transaction with asset associations', async () => {
+    it('should fetch transaction by refillRequestId', async () => {
       const mockTransaction = {
         id: 123,
         refillRequestId: 'REQ001',
-        Asset: {
-          id: 1,
-          symbol: 'BTC',
-          Blockchain: { symbol: 'BTC' },
-          Wallet: { address: '0xhot' }
-        }
+        status: 'COMPLETED'
       };
 
       db.RefillTransaction.findOne = jest.fn().mockResolvedValue(mockTransaction);
@@ -135,15 +130,7 @@ describe('RefillTransaction Helper', () => {
       const result = await refillTransactionHelper.getRefillTransactionByRequestId('REQ001');
 
       expect(db.RefillTransaction.findOne).toHaveBeenCalledWith({
-        where: { refillRequestId: 'REQ001' },
-        include: [{
-          model: db.Asset,
-          as: 'Asset',
-          include: [
-            { model: db.Blockchain, as: 'Blockchain' },
-            { model: db.Wallet, as: 'Wallet' }
-          ]
-        }]
+        where: { refillRequestId: 'REQ001' }
       });
       expect(result).toEqual(mockTransaction);
     });
@@ -156,14 +143,13 @@ describe('RefillTransaction Helper', () => {
       expect(result).toBeNull();
     });
 
-    it('should include nested associations', async () => {
+    it('should query with correct where clause', async () => {
       db.RefillTransaction.findOne = jest.fn().mockResolvedValue({});
 
       await refillTransactionHelper.getRefillTransactionByRequestId('REQ001');
 
       const callArgs = db.RefillTransaction.findOne.mock.calls[0][0];
-      expect(callArgs.include[0].as).toBe('Asset');
-      expect(callArgs.include[0].include).toHaveLength(2);
+      expect(callArgs.where.refillRequestId).toBe('REQ001');
     });
   });
 
@@ -271,6 +257,57 @@ describe('RefillTransaction Helper', () => {
       const result = await refillTransactionHelper.getTransactionsByStatus('COMPLETED');
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('getLastSuccessfulRefillByAssetId', () => {
+    it('should fetch last successful refill for asset', async () => {
+      const mockTransaction = {
+        id: 123,
+        refillRequestId: 'REQ001',
+        assetId: 1,
+        status: 'COMPLETED',
+        updatedAt: '2025-11-06T08:00:00Z'
+      };
+
+      db.RefillTransaction.findOne = jest.fn().mockResolvedValue(mockTransaction);
+
+      const result = await refillTransactionHelper.getLastSuccessfulRefillByAssetId(1);
+
+      expect(db.RefillTransaction.findOne).toHaveBeenCalledWith({
+        where: { 
+          assetId: 1,
+          status: 'COMPLETED'
+        },
+        order: [['updatedAt', 'DESC']]
+      });
+      expect(result).toEqual(mockTransaction);
+    });
+
+    it('should return null when no successful refills exist', async () => {
+      db.RefillTransaction.findOne = jest.fn().mockResolvedValue(null);
+
+      const result = await refillTransactionHelper.getLastSuccessfulRefillByAssetId(1);
+
+      expect(result).toBeNull();
+    });
+
+    it('should order by updatedAt DESC to get most recent', async () => {
+      db.RefillTransaction.findOne = jest.fn().mockResolvedValue({});
+
+      await refillTransactionHelper.getLastSuccessfulRefillByAssetId(1);
+
+      const callArgs = db.RefillTransaction.findOne.mock.calls[0][0];
+      expect(callArgs.order).toEqual([['updatedAt', 'DESC']]);
+    });
+
+    it('should only return COMPLETED status transactions', async () => {
+      db.RefillTransaction.findOne = jest.fn().mockResolvedValue(null);
+
+      await refillTransactionHelper.getLastSuccessfulRefillByAssetId(1);
+
+      const callArgs = db.RefillTransaction.findOne.mock.calls[0][0];
+      expect(callArgs.where.status).toBe('COMPLETED');
     });
   });
 });

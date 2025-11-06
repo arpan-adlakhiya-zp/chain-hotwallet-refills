@@ -48,11 +48,18 @@ class RefillValidationService {
         return assetValidation;
       }
 
-      logger.info(`Validating pending refill for asset ${refillData.asset_symbol}`);
+      logger.info(`Validating pending refill request for asset ${refillData.asset_symbol}`);
       // Check if asset already has a pending refill (prevent duplicate in-flight refills)
       const pendingRefillCheck = await this.validateNoPendingRefill(assetValidation.data.asset.id);
       if (!pendingRefillCheck.success) {
         return pendingRefillCheck;
+      }
+
+      logger.info(`Validating refill cooldown period for asset ${refillData.asset_symbol}`);
+      // Check if cooldown period has passed since last successful refill
+      const cooldownCheck = await this.validateCooldownPeriod(assetValidation.data.asset);
+      if (!cooldownCheck.success) {
+        return cooldownCheck;
       }
 
       logger.info(`Validating hot wallet address for ${refillData.wallet_address}`);
@@ -293,6 +300,81 @@ class RefillValidationService {
         success: false,
         error: 'Error checking for pending refills',
         code: 'PENDING_REFILL_CHECK_ERROR',
+        data: {
+          details: error.message
+        }
+      };
+    }
+  }
+
+  /**
+   * Validate cooldown period has passed since last successful refill
+   * @param {Object} asset - Asset object with cooldown configuration
+   * @returns {Object} Validation result
+   */
+  async validateCooldownPeriod(asset) {
+    try {
+      // If no cooldown period configured, allow refill
+      if (!asset.refillCooldownPeriod || asset.refillCooldownPeriod <= 0) {
+        return {
+          success: true,
+          error: null,
+          code: null,
+          data: null
+        };
+      }
+
+      // Get last successful refill for this asset
+      const lastSuccessfulRefill = await databaseService.getLastSuccessfulRefillByAssetId(asset.id);
+      
+      // If no previous successful refill, allow
+      if (!lastSuccessfulRefill) {
+        return {
+          success: true,
+          error: null,
+          code: null,
+          data: null
+        };
+      }
+
+      // Calculate time since last successful refill
+      const lastRefillTime = new Date(lastSuccessfulRefill.updatedAt);
+      const currentTime = new Date();
+      const timeSinceLastRefill = Math.floor((currentTime - lastRefillTime) / 1000); // in seconds
+
+      // Check if cooldown period has passed
+      if (timeSinceLastRefill < asset.refillCooldownPeriod) {
+        const remainingCooldown = asset.refillCooldownPeriod - timeSinceLastRefill;
+        
+        return {
+          success: false,
+          error: `Refill cooldown period active. Please wait ${remainingCooldown} seconds before requesting another refill.`,
+          code: 'COOLDOWN_PERIOD_ACTIVE',
+          data: {
+            lastRefillTime: lastRefillTime.toISOString(),
+            cooldownPeriodSeconds: asset.refillCooldownPeriod,
+            remainingCooldownSeconds: remainingCooldown,
+            lastRefillRequestId: lastSuccessfulRefill.refillRequestId
+          }
+        };
+      }
+
+      // Cooldown period has passed
+      return {
+        success: true,
+        error: null,
+        code: null,
+        data: {
+          timeSinceLastRefill,
+          lastRefillTime: lastRefillTime.toISOString()
+        }
+      };
+    } catch (error) {
+      logger.error(`Error checking cooldown period: ${error.message}`);
+      return {
+        success: false,
+        error: 'Error checking cooldown period',
+        code: 'COOLDOWN_CHECK_ERROR',
         data: {
           details: error.message
         }

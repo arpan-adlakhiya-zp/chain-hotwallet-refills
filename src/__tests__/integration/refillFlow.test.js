@@ -331,6 +331,99 @@ describe('Refill Flow Integration Tests', () => {
     });
   });
 
+  describe('POST /v1/wallet/refill - Cooldown Period', () => {
+    it('should return 400 when cooldown period is still active', async () => {
+      const refillRequest = {
+        refill_request_id: 'REQ_COOLDOWN',
+        wallet_address: '0xhot',
+        asset_symbol: 'BTC',
+        asset_address: 'native',
+        chain_name: 'Bitcoin',
+        refill_amount: '1.0',
+        refill_sweep_wallet: '0xcold'
+      };
+
+      refillService.processRefillRequestService.mockResolvedValue({
+        success: false,
+        error: 'Refill cooldown period active. Please wait 3600 seconds before requesting another refill.',
+        code: 'COOLDOWN_PERIOD_ACTIVE',
+        data: {
+          lastRefillTime: '2025-11-06T07:00:00Z',
+          cooldownPeriodSeconds: 7200,
+          remainingCooldownSeconds: 3600,
+          lastRefillRequestId: 'REQ_PREVIOUS'
+        }
+      });
+
+      const response = await request(app)
+        .post('/v1/wallet/refill')
+        .send(refillRequest);
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.code).toBe('COOLDOWN_PERIOD_ACTIVE');
+      expect(response.body.data.remainingCooldownSeconds).toBe(3600);
+      expect(response.body.data.lastRefillRequestId).toBe('REQ_PREVIOUS');
+    });
+
+    it('should allow refill when cooldown period has passed', async () => {
+      const refillRequest = {
+        refill_request_id: 'REQ_AFTER_COOLDOWN',
+        wallet_address: '0xhot',
+        asset_symbol: 'BTC',
+        asset_address: 'native',
+        chain_name: 'Bitcoin',
+        refill_amount: '1.0',
+        refill_sweep_wallet: '0xcold'
+      };
+
+      refillService.processRefillRequestService.mockResolvedValue({
+        success: true,
+        data: {
+          refillRequestId: 'REQ_AFTER_COOLDOWN',
+          transactionId: 'fb-tx-new',
+          status: 'PROCESSING'
+        }
+      });
+
+      const response = await request(app)
+        .post('/v1/wallet/refill')
+        .send(refillRequest);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.refillRequestId).toBe('REQ_AFTER_COOLDOWN');
+    });
+
+    it('should allow refill when no cooldown period configured for asset', async () => {
+      const refillRequest = {
+        refill_request_id: 'REQ_NO_COOLDOWN',
+        wallet_address: '0xhot',
+        asset_symbol: 'ETH',
+        asset_address: 'native',
+        chain_name: 'Ethereum',
+        refill_amount: '5.0',
+        refill_sweep_wallet: '0xcold'
+      };
+
+      refillService.processRefillRequestService.mockResolvedValue({
+        success: true,
+        data: {
+          refillRequestId: 'REQ_NO_COOLDOWN',
+          transactionId: 'fb-tx-eth-2',
+          status: 'PROCESSING'
+        }
+      });
+
+      const response = await request(app)
+        .post('/v1/wallet/refill')
+        .send(refillRequest);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+    });
+  });
+
   describe('GET /v1/wallet/refill/status/:refill_request_id', () => {
     it('should return transaction status for completed transaction', async () => {
       refillTransactionService.getTransactionStatusFromDB.mockResolvedValue({

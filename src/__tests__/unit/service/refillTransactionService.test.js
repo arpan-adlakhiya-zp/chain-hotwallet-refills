@@ -44,7 +44,19 @@ describe('RefillTransactionService', () => {
       const existingTxn = {
         id: 123,
         refillRequestId: 'REQ001',
-        status: 'COMPLETED'
+        status: 'COMPLETED',
+        amountAtomic: '100000000',
+        amount: '1.0',
+        tokenSymbol: 'BTC',
+        chainName: 'Bitcoin',
+        assetId: 1,
+        providerStatus: 'COMPLETED',
+        provider: 'fireblocks',
+        providerTxId: 'fb-123',
+        txHash: '0xabc',
+        message: 'Transfer complete',
+        createdAt: '2025-11-06T10:00:00Z',
+        updatedAt: '2025-11-06T10:30:00Z'
       };
 
       databaseService.getRefillTransactionByRequestId.mockResolvedValue(existingTxn);
@@ -53,7 +65,14 @@ describe('RefillTransactionService', () => {
 
       expect(result.success).toBe(false);
       expect(result.code).toBe('TRANSACTION_EXISTS');
-      expect(result.data.transaction).toEqual(existingTxn);
+      expect(result.data.transaction).toEqual(expect.objectContaining({
+        refillRequestId: 'REQ001',
+        status: 'COMPLETED',
+        amountAtomic: '100000000',
+        amount: '1.0',
+        tokenSymbol: 'BTC',
+        chainName: 'Bitcoin'
+      }));
       expect(databaseService.createRefillTransaction).not.toHaveBeenCalled();
     });
 

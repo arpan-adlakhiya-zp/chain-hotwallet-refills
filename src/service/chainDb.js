@@ -140,6 +140,16 @@ class DatabaseService {
     }
   }
 
+  async getLastSuccessfulRefillByAssetId(assetId) {
+    try {
+      await this.connect();
+      return await refillTransactionHelper.getLastSuccessfulRefillByAssetId(assetId);
+    } catch (error) {
+      logger.error(`Error getting last successful refill: ${error.message}`);
+      throw error;
+    }
+  }
+
   // Health check method
   async healthCheck() {
     try {

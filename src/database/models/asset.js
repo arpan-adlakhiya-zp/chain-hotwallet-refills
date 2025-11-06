@@ -81,6 +81,13 @@ module.exports = (sequelize, DataTypes) => {
       field: 'refill_dust_threshold_atomic',
       type: DataTypes.BIGINT
     },
+    refillCooldownPeriod: {
+      field: 'refill_cooldown_period',
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: 'Cooldown period in seconds between successful refills'
+    },
     isActive: {
       field: 'is_active',
       allowNull: false,

@@ -29,15 +29,15 @@ function updateRefillTransaction(refillRequestId, updateData) {
  */
 function getRefillTransactionByRequestId(refillRequestId) {
   return db.RefillTransaction.findOne({
-    where: { refillRequestId: refillRequestId },
-    include: [{
-      model: db.Asset,
-      as: 'Asset',
-      include: [
-        { model: db.Blockchain, as: 'Blockchain' },
-        { model: db.Wallet, as: 'Wallet' }
-      ]
-    }]
+    where: { refillRequestId: refillRequestId }
+    // include: [{
+    //   model: db.Asset,
+    //   as: 'Asset',
+    //   include: [
+    //     { model: db.Blockchain, as: 'Blockchain' },
+    //     { model: db.Wallet, as: 'Wallet' }
+    //   ]
+    // }]
   });
 }
 
@@ -72,10 +72,26 @@ function getTransactionsByStatus(status, limit = 100) {
   });
 }
 
+/**
+ * Get the last successful (COMPLETED) refill transaction for an asset
+ * @param {number} assetId - Asset ID
+ * @returns {Promise<Object|null>} Last successful transaction or null
+ */
+function getLastSuccessfulRefillByAssetId(assetId) {
+  return db.RefillTransaction.findOne({
+    where: { 
+      assetId: assetId,
+      status: 'COMPLETED'
+    },
+    order: [['updatedAt', 'DESC']]  // Most recent completion first
+  });
+}
+
 module.exports = {
   createRefillTransaction,
   updateRefillTransaction,
   getRefillTransactionByRequestId,
   getPendingTransactionByAssetId,
-  getTransactionsByStatus
+  getTransactionsByStatus,
+  getLastSuccessfulRefillByAssetId
 };

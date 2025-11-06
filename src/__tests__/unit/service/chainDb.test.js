@@ -246,5 +246,40 @@ describe('DatabaseService (chainDb)', () => {
       expect(refillTransactionHelper.getTransactionsByStatus).toHaveBeenCalledWith('PROCESSING', 100);
     });
   });
+
+  describe('getLastSuccessfulRefillByAssetId', () => {
+    it('should connect and call transaction helper', async () => {
+      const mockTransaction = {
+        id: 123,
+        assetId: 1,
+        status: 'COMPLETED',
+        updatedAt: '2025-11-06T08:00:00Z'
+      };
+      refillTransactionHelper.getLastSuccessfulRefillByAssetId.mockResolvedValue(mockTransaction);
+
+      const result = await databaseService.getLastSuccessfulRefillByAssetId(1);
+
+      expect(mockSequelize.authenticate).toHaveBeenCalled();
+      expect(refillTransactionHelper.getLastSuccessfulRefillByAssetId).toHaveBeenCalledWith(1);
+      expect(result).toEqual(mockTransaction);
+    });
+
+    it('should return null when no successful refill found', async () => {
+      refillTransactionHelper.getLastSuccessfulRefillByAssetId.mockResolvedValue(null);
+
+      const result = await databaseService.getLastSuccessfulRefillByAssetId(1);
+
+      expect(result).toBeNull();
+    });
+
+    it('should throw error on database failure', async () => {
+      refillTransactionHelper.getLastSuccessfulRefillByAssetId.mockRejectedValue(
+        new Error('Database error')
+      );
+
+      await expect(databaseService.getLastSuccessfulRefillByAssetId(1))
+        .rejects.toThrow('Database error');
+    });
+  });
 });
 
