@@ -1,0 +1,288 @@
+{
+	"info": {
+		"_postman_id": "c2951c1e-f202-440c-a62d-d0752d9ef55b",
+		"name": "Chain Hotwallet Refills",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "48528896"
+	},
+	"item": [
+		{
+			"name": "Raise a refill request",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"refill_request_id\": \"TEST_REQ_00001\",\n  \"wallet_address\": \"<hot_wallet_address>\",\n  \"asset_symbol\": \"<asset_symbol>\",\n  \"chain_name\": \"<chain_name>\",\n  \"refill_amount\": \"<refill_amount>\",\n  \"refill_sweep_wallet\": \"<refill_sweep_wallet>\",\n  \"asset_address\": \"<asset_address>\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/wallet/refill",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"wallet",
+						"refill"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Raise a refill request (AUTH)",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"const dateNow = Math.floor(Date.now() / 1000);",
+							"",
+							"// Your payload (as an object)",
+							"const payload = {",
+							"  refill_request_id: \"TEST_REQ_00007\",",
+							"  wallet_address: \"<wallet_address>\",",
+							"  asset_symbol: \"<asset_symbol>\",",
+							"  chain_name: \"<chain_name>\",",
+							"  refill_amount: \"<refill_amount>\",",
+							"  refill_sweep_wallet: \"<refill_sweep_wallet>\",",
+							"  asset_address: \"<asset_address>\",",
+							"  iat: dateNow,",
+							"  exp: dateNow + 300",
+							"};",
+							"",
+							"// Your private key (PEM format, as a Postman variable or pasted directly)",
+							"const privateKey = pm.collectionVariables.get(\"authPrivateKey\");",
+							"",
+							"// JWT Header",
+							"const header = {",
+							"  alg: \"RS256\",",
+							"  typ: \"JWT\"",
+							"};",
+							"",
+							"const navigator = {}; //fake a navigator object for the lib",
+							"const window = {}; //fake a window object for the lib",
+							"eval(pm.collectionVariables.get('jsrsasign-js'));",
+							"",
+							"const sHeader = JSON.stringify(header);",
+							"const sPayload = JSON.stringify(payload);",
+							"",
+							"const jwt = KJUR.jws.JWS.sign(\"RS256\", sHeader, sPayload, privateKey);",
+							"",
+							"pm.request.body.update(jwt);",
+							"pm.request.headers.upsert({ key: \"Content-Type\", value: \"text/plain\" });"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/wallet/refill",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"wallet",
+						"refill"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get refill request status",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				},
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/wallet/refill/status/TEST_REQ_00001",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"wallet",
+						"refill",
+						"status",
+						"TEST_REQ_00001"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get refill request status (AUTH)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				},
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"const dateNow = Math.floor(Date.now() / 1000);",
+							"",
+							"// Your payload (as an object)",
+							"const payload = {",
+							"  refill_request_id: \"TEST_REQ_00001\",",
+							"  iat: dateNow,",
+							"  exp: dateNow + 300",
+							"};",
+							"",
+							"// Your private key (PEM format, as a Postman variable or pasted directly)",
+							"const privateKey = pm.collectionVariables.get(\"authPrivateKey\");",
+							"",
+							"// JWT Header",
+							"const header = {",
+							"  alg: \"RS256\",",
+							"  typ: \"JWT\"",
+							"};",
+							"",
+							"const navigator = {}; //fake a navigator object for the lib",
+							"const window = {}; //fake a window object for the lib",
+							"eval(pm.collectionVariables.get('jsrsasign-js'));",
+							"",
+							"const sHeader = JSON.stringify(header);",
+							"const sPayload = JSON.stringify(payload);",
+							"",
+							"const jwt = KJUR.jws.JWS.sign(\"RS256\", sHeader, sPayload, privateKey);",
+							"",
+							"pm.collectionVariables.set(\"refill_request_id_jwt\", jwt);",
+							"pm.collectionVariables.set(\"refill_request_id\", payload.refill_request_id);",
+							"pm.request.headers.upsert({ key: \"Content-Type\", value: \"text/plain\" });"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{refill_request_id_jwt}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/wallet/refill/status/{{refill_request_id}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"wallet",
+						"refill",
+						"status",
+						"{{refill_request_id}}"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": ""
+		},
+		{
+			"key": "authPrivateKey",
+			"value": ""
+		},
+		{
+			"key": "jsrsasign-js",
+			"value": ""
+		},
+		{
+			"key": "refill_request_id_jwt",
+			"value": ""
+		},
+		{
+			"key": "refill_request_id",
+			"value": ""
+		}
+	]
+}
