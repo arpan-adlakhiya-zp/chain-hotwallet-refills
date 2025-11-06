@@ -1,6 +1,7 @@
 const refillService = require("../service/refillService");
 const refillTransactionService = require("../service/refillTransactionService");
 const logger = require("../middleware/logger")("refillController");
+const config = require("../config");
 
 async function processRefillRequestController(req, res, next) {
   try {
@@ -34,12 +35,29 @@ async function checkTransactionStatusController(req, res, next) {
     const { refill_request_id } = req.verifiedData;
 
     if (!refill_request_id) {
+      logger.error('refill_request_id is missing in JWT');
       return res.status(400).json({
         success: false,
-        error: 'refill_request_id is required',
+        error: 'refill_request_id is required in JWT',
         code: 'MISSING_PARAMETER',
         data: null
       });
+    }
+
+    if (config.get('authEnabled')) {
+      // Verify whether the refill request ID in JWT token matches the value in URL parameter
+      if (refill_request_id !== req.params.refill_request_id) {
+        logger.error(`Refill request ID mismatch in JWT and URL parameter: ${refill_request_id} !== ${req.params.refill_request_id}`);
+        return res.status(400).json({
+          success: false,
+          error: 'Refill request ID mismatch in JWT and URL parameter',
+          code: 'REFILL_REQUEST_ID_MISMATCH',
+          data: {
+            requestIdInJwt: refill_request_id,
+            requestIdInUrl: req.params.refill_request_id
+          }
+        });
+      }
     }
 
     logger.info(`Checking transaction status for refill request: ${refill_request_id}`);

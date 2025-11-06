@@ -143,6 +143,7 @@ describe('Authentication Middleware', () => {
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -210,6 +211,111 @@ describe('Authentication Middleware', () => {
       );
     });
 
+    it('should reject JWT with excessive lifetime (> 5 minutes)', () => {
+      const payload = {
+        refill_request_id: 'REQ_EXCESSIVE_LIFETIME'
+      };
+
+      // Create token with 1 hour expiration (expiresIn will set exp = iat + 3600)
+      const token = jwt.sign(payload, privateKey, { 
+        algorithm: 'RS256',
+        expiresIn: '1h' // 3600 seconds - exceeds 5 minute max
+      });
+      mockReq.rawBody = token;
+
+      config.get.mockReturnValueOnce(undefined); // authEnabled (not false, so auth is enabled)
+      config.get.mockReturnValueOnce(publicKey); // authPublicKey
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetime (5 minutes)
+
+      authenticate(mockReq, mockRes, mockNext);
+
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: 'JWT lifetime exceeds maximum allowed duration of 300 seconds',
+          code: 'JWT_LIFETIME_EXCEEDED',
+          data: expect.objectContaining({
+            expirationTime: expect.any(String),
+            issuedAtTime: expect.any(String),
+            jwtLifetime: 3600,
+            maxAllowedLifetime: 300
+          })
+        })
+      );
+    });
+
+    it('should accept JWT with valid lifetime (≤ 5 minutes)', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const payload = {
+        refill_request_id: 'REQ_VALID_LIFETIME',
+        wallet_address: '0x123',
+        iat: now,
+        exp: now + 300 // Exactly 5 minutes lifetime
+      };
+
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', noTimestamp: true });
+      mockReq.rawBody = token;
+
+      config.get.mockReturnValueOnce(undefined); // authEnabled (not false, so auth is enabled)
+      config.get.mockReturnValueOnce(publicKey); // authPublicKey
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetime (5 minutes)
+
+      authenticate(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockReq.verifiedData).toBeDefined();
+      expect(mockReq.verifiedData.refill_request_id).toBe('REQ_VALID_LIFETIME');
+      expect(mockRes.status).not.toHaveBeenCalled();
+    });
+
+    it('should accept JWT with lifetime less than maximum', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const payload = {
+        refill_request_id: 'REQ_SHORT_LIFETIME',
+        wallet_address: '0x123',
+        iat: now,
+        exp: now + 60 // 1 minute lifetime (well within 5 minute max)
+      };
+
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', noTimestamp: true });
+      mockReq.rawBody = token;
+
+      config.get.mockReturnValueOnce(undefined); // authEnabled (not false, so auth is enabled)
+      config.get.mockReturnValueOnce(publicKey); // authPublicKey
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetime (5 minutes)
+
+      authenticate(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockReq.verifiedData).toBeDefined();
+      expect(mockRes.status).not.toHaveBeenCalled();
+    });
+
+    it('should allow custom jwtMaxLifetime configuration', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const payload = {
+        refill_request_id: 'REQ_CUSTOM_LIFETIME',
+        wallet_address: '0x123',
+        iat: now,
+        exp: now + 600 // 10 minutes lifetime
+      };
+
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', noTimestamp: true });
+      mockReq.rawBody = token;
+
+      config.get.mockReturnValueOnce(undefined); // authEnabled (not false, so auth is enabled)
+      config.get.mockReturnValueOnce(publicKey); // authPublicKey
+      config.get.mockReturnValueOnce(600); // jwtMaxLifetime (10 minutes - custom)
+
+      authenticate(mockReq, mockRes, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockReq.verifiedData).toBeDefined();
+      expect(mockRes.status).not.toHaveBeenCalled();
+    });
+
     it('should attach verified data to request object', () => {
       const payload = {
         refill_request_id: 'REQ004',
@@ -267,7 +373,7 @@ describe('Authentication Middleware', () => {
   });
 
   describe('authenticate - GET requests', () => {
-    it('should authenticate GET request with valid JWT token in URL parameter', () => {
+    it('should authenticate GET request with valid JWT token in Authorization header', () => {
       mockReq.method = 'GET';
       const payload = {
         refill_request_id: 'REQ007',
@@ -275,7 +381,8 @@ describe('Authentication Middleware', () => {
       };
 
       const token = jwt.sign(payload, privateKey, { algorithm: 'RS256' });
-      mockReq.params = { refill_request_id: token };
+      mockReq.headers.authorization = `Bearer ${token}`;
+      mockReq.params = { refill_request_id: 'REQ007' };
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
@@ -288,29 +395,10 @@ describe('Authentication Middleware', () => {
       expect(mockRes.status).not.toHaveBeenCalled();
     });
 
-    it('should reject GET request without params', () => {
+    it('should reject GET request without Authorization header', () => {
       mockReq.method = 'GET';
-      mockReq.params = undefined;
-
-      config.get.mockReturnValueOnce(true); // authEnabled
-      config.get.mockReturnValueOnce(publicKey); // authPublicKey
-
-      authenticate(mockReq, mockRes, mockNext);
-
-      expect(mockNext).not.toHaveBeenCalled();
-      expect(mockRes.status).toHaveBeenCalledWith(400);
-      expect(mockRes.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          success: false,
-          error: 'Query parameters are required',
-          code: 'MISSING_QUERY_PARAMETERS'
-        })
-      );
-    });
-
-    it('should reject GET request with empty params', () => {
-      mockReq.method = 'GET';
-      mockReq.params = {};
+      mockReq.params = { refill_request_id: 'REQ007' };
+      delete mockReq.headers.authorization;
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
@@ -322,15 +410,37 @@ describe('Authentication Middleware', () => {
       expect(mockRes.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: 'Invalid JWT token',
-          code: 'INVALID_TOKEN'
+          error: 'Authorization header is required',
+          code: 'MISSING_AUTHORIZATION_HEADER'
+        })
+      );
+    });
+
+    it('should reject GET request with invalid Authorization header format', () => {
+      mockReq.method = 'GET';
+      mockReq.headers.authorization = 'InvalidFormat token123';
+      mockReq.params = { refill_request_id: 'REQ007' };
+
+      config.get.mockReturnValueOnce(true); // authEnabled
+      config.get.mockReturnValueOnce(publicKey); // authPublicKey
+
+      authenticate(mockReq, mockRes, mockNext);
+
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: 'Invalid Authorization header format. Expected: Bearer <token>',
+          code: 'INVALID_AUTHORIZATION_FORMAT'
         })
       );
     });
 
     it('should reject GET request with invalid JWT token', () => {
       mockReq.method = 'GET';
-      mockReq.params = { refill_request_id: 'invalid.jwt.token' };
+      mockReq.headers.authorization = 'Bearer invalid.jwt.token';
+      mockReq.params = { refill_request_id: 'REQ007' };
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
@@ -348,20 +458,48 @@ describe('Authentication Middleware', () => {
       );
     });
 
-    it('should authenticate DELETE request with valid JWT token in URL parameter', () => {
-      mockReq.method = 'DELETE';
-      const payload = { refill_request_id: 'REQ008' };
-
-      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256' });
-      mockReq.params = { refill_request_id: token };
+    it('should reject GET request with empty Bearer token', () => {
+      mockReq.method = 'GET';
+      mockReq.headers.authorization = 'Bearer ';
+      mockReq.params = { refill_request_id: 'REQ007' };
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
 
       authenticate(mockReq, mockRes, mockNext);
 
-      expect(mockNext).toHaveBeenCalled();
-      expect(mockReq.verifiedData.refill_request_id).toBe('REQ008');
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: 'Bearer token is required',
+          code: 'MISSING_BEARER_TOKEN'
+        })
+      );
+    });
+
+    it('should reject DELETE request (method not allowed)', () => {
+      mockReq.method = 'DELETE';
+      const payload = { refill_request_id: 'REQ008' };
+
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256' });
+      mockReq.headers.authorization = `Bearer ${token}`;
+
+      config.get.mockReturnValueOnce(true); // authEnabled
+      config.get.mockReturnValueOnce(publicKey); // authPublicKey
+
+      authenticate(mockReq, mockRes, mockNext);
+
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockRes.status).toHaveBeenCalledWith(405);
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: 'Method not allowed. Only POST and GET are supported.',
+          code: 'METHOD_NOT_ALLOWED'
+        })
+      );
     });
 
     it('should skip authentication for GET requests when authEnabled is false', () => {

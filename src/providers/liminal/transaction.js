@@ -133,7 +133,7 @@ class Transaction {
       logger.debug({ transactionStatus: status });
       
       return {
-        status: status.status || 'unknown',
+        status: status.status,
         sequenceId: batchId,
         details: status
       };

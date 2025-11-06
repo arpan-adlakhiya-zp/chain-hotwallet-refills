@@ -2,9 +2,9 @@
 jest.mock('../../middleware/authentication', () => ({
   authenticate: (req, res, next) => {
     // For POST requests, use body
-    // For GET requests, extract refill_request_id from URL parameter (simulating JWT decode)
+    // For GET requests, use params (simulating decoded JWT from Authorization header)
     if (req.method === 'GET' && req.params && req.params.refill_request_id) {
-      // Simulate decoding JWT - extract refill_request_id from URL
+      // Simulate decoded JWT - extract refill_request_id from URL parameter
       req.verifiedData = { refill_request_id: req.params.refill_request_id };
     } else {
       req.verifiedData = req.body;

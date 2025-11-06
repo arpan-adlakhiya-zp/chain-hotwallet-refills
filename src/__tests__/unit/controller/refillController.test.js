@@ -1,6 +1,25 @@
+// Mock config before any imports to prevent database config errors
+jest.mock('../../../config', () => ({
+  get: jest.fn(),
+  getSecret: jest.fn((key) => {
+    if (key === 'chainDb') {
+      return {
+        host: 'localhost',
+        port: 5432,
+        user: 'test',
+        password: 'test',
+        name: 'testdb'
+      };
+    }
+    return null;
+  }),
+  getAllConfig: jest.fn()
+}));
+
 const { processRefillRequestController, checkTransactionStatusController } = require('../../../controller/refillController');
 const refillService = require('../../../service/refillService');
 const refillTransactionService = require('../../../service/refillTransactionService');
+const config = require('../../../config');
 
 jest.mock('../../../service/refillService');
 jest.mock('../../../service/refillTransactionService');
@@ -125,6 +144,7 @@ describe('RefillController', () => {
   describe('checkTransactionStatusController', () => {
     it('should return 200 when transaction found', async () => {
       mockReq.verifiedData = { refill_request_id: 'REQ001' };
+      mockReq.params = { refill_request_id: 'REQ001' };
 
       const mockResult = {
         success: true,
@@ -135,6 +155,7 @@ describe('RefillController', () => {
         }
       };
 
+      config.get.mockReturnValue(false); // authEnabled = false, skip validation
       refillTransactionService.getTransactionStatusFromDB.mockResolvedValue(mockResult);
 
       await checkTransactionStatusController(mockReq, mockRes, mockNext);
@@ -145,6 +166,7 @@ describe('RefillController', () => {
 
     it('should return 404 when transaction not found', async () => {
       mockReq.verifiedData = { refill_request_id: 'NOTFOUND' };
+      mockReq.params = { refill_request_id: 'NOTFOUND' };
 
       const mockResult = {
         success: false,
@@ -152,6 +174,7 @@ describe('RefillController', () => {
         code: 'TRANSACTION_NOT_FOUND'
       };
 
+      config.get.mockReturnValue(false); // authEnabled = false, skip validation
       refillTransactionService.getTransactionStatusFromDB.mockResolvedValue(mockResult);
 
       await checkTransactionStatusController(mockReq, mockRes, mockNext);
@@ -170,7 +193,7 @@ describe('RefillController', () => {
         expect.objectContaining({
           success: false,
           code: 'MISSING_PARAMETER',
-          error: 'refill_request_id is required'
+          error: 'refill_request_id is required in JWT'
         })
       );
       expect(refillTransactionService.getTransactionStatusFromDB).not.toHaveBeenCalled();
@@ -178,7 +201,9 @@ describe('RefillController', () => {
 
     it('should return 500 on internal server error', async () => {
       mockReq.verifiedData = { refill_request_id: 'REQ001' };
+      mockReq.params = { refill_request_id: 'REQ001' };
 
+      config.get.mockReturnValue(false); // authEnabled = false, skip validation
       refillTransactionService.getTransactionStatusFromDB.mockRejectedValue(
         new Error('Database error')
       );
@@ -197,7 +222,9 @@ describe('RefillController', () => {
 
     it('should use DB-only check (no provider call)', async () => {
       mockReq.verifiedData = { refill_request_id: 'REQ001' };
+      mockReq.params = { refill_request_id: 'REQ001' };
 
+      config.get.mockReturnValue(false); // authEnabled = false, skip validation
       refillTransactionService.getTransactionStatusFromDB.mockResolvedValue({
         success: true,
         data: { status: 'PROCESSING' }

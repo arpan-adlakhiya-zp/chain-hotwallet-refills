@@ -14,6 +14,10 @@ const schema = {
             authPublicKey: {
                 type: 'string'
             },
+            jwtMaxLifetime: {
+                type: 'number',
+                default: 300
+            },
             cronEnabled: {
                 type: 'boolean',
                 default: true

@@ -44,8 +44,8 @@ function authenticate(req, res, next) {
 
     let token = null;
 
-    // For POST/PUT/PATCH requests: Use raw body as JWT
-    if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+    // For POST requests: Use raw body as JWT
+    if (req.method === 'POST') {
       // Check both req.body (from express.text) and req.rawBody (from express.json verify)
       // Use the first one that's a non-empty string
       if (typeof req.body === 'string' && req.body.length > 0) {
@@ -62,27 +62,47 @@ function authenticate(req, res, next) {
           code: 'INVALID_REQUEST_FORMAT'
         });
       }
-    } 
-    // For GET/DELETE requests: Use request parameters as JWT
-    else if (['GET', 'DELETE'].includes(req.method)) {
-      if (!req.params) {
-        logger.error('Query parameters are missing');
-        return res.status(400).json({
+    }
+    // For GET requests: Use Authorization header with Bearer token
+    else if (req.method === 'GET') {
+      const authHeader = req.headers.authorization;
+      
+      if (!authHeader) {
+        logger.error('Authorization header is missing');
+        return res.status(401).json({
           success: false,
-          error: 'Query parameters are required',
-          code: 'MISSING_QUERY_PARAMETERS'
+          error: 'Authorization header is required',
+          code: 'MISSING_AUTHORIZATION_HEADER'
         });
       }
       
-      // Get token from refill_request_id parameter
-      if (req.params.refill_request_id && typeof req.params.refill_request_id === 'string' && req.params.refill_request_id.length > 0) {
-        token = req.params.refill_request_id;
+      // Extract token from "Bearer <token>"
+      const parts = authHeader.split(' ');
+      if (parts.length !== 2 || parts[0] !== 'Bearer') {
+        logger.error('Invalid Authorization header format');
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid Authorization header format. Expected: Bearer <token>',
+          code: 'INVALID_AUTHORIZATION_FORMAT'
+        });
+      }
+      
+      token = parts[1];
+      
+      if (!token || token.length === 0) {
+        logger.error('Bearer token is empty');
+        return res.status(401).json({
+          success: false,
+          error: 'Bearer token is required',
+          code: 'MISSING_BEARER_TOKEN'
+        });
       }
     } else {
+      // Only POST and GET methods are supported
       logger.error(`Unsupported HTTP method: ${req.method}`);
       return res.status(405).json({
         success: false,
-        error: 'Method not allowed',
+        error: 'Method not allowed. Only POST and GET are supported.',
         code: 'METHOD_NOT_ALLOWED'
       });
     }
@@ -90,12 +110,45 @@ function authenticate(req, res, next) {
     // Decode the JWT to log request details
     const decoded = jwt.decode(token);
     logger.debug(`Decoded JWT: ${JSON.stringify(decoded, null, 2)}`);
-    logger.info(`Authentication request received for: ${decoded?.refill_request_id || 'unknown'}`);
+    logger.info(`Authentication request received for: ${decoded?.refill_request_id}`);
 
-    // Verify the JWT signature
+    // Get configuration for JWT validation
+    const maxLifetime = config.get('jwtMaxLifetime') || 300; // 5 minutes default
+    logger.debug(`Configured JWT max lifetime: ${maxLifetime} seconds`);
+
+    // Validate JWT lifetime BEFORE verification
+    // This ensures we reject tokens with excessive expiration times
+    if (decoded && decoded.exp && decoded.iat) {
+      logger.debug(`JWT expiration time: ${new Date(decoded.exp * 1000).toISOString()}`);
+      logger.debug(`JWT issued at time: ${new Date(decoded.iat * 1000).toISOString()}`);
+      const jwtLifetime = decoded.exp - decoded.iat;
+      
+      if (jwtLifetime > maxLifetime) {
+        logger.error(`JWT lifetime exceeds maximum allowed: ${jwtLifetime}s > ${maxLifetime}s`);
+        return res.status(401).json({
+          success: false,
+          error: `JWT lifetime exceeds maximum allowed duration of ${maxLifetime} seconds`,
+          code: 'JWT_LIFETIME_EXCEEDED',
+          data: {
+            expirationTime: new Date(decoded.exp * 1000).toISOString(),
+            issuedAtTime: new Date(decoded.iat * 1000).toISOString(),
+            jwtLifetime: jwtLifetime,
+            maxAllowedLifetime: maxLifetime,
+            details: `Token was created with ${jwtLifetime}s validity, but maximum allowed is ${maxLifetime}s`
+          }
+        });
+      }
+      
+      logger.debug(`JWT lifetime validation passed: ${jwtLifetime}s <= ${maxLifetime}s`);
+    } else if (decoded && (!decoded.exp || !decoded.iat)) {
+      // JWT has no exp or no iat - we can't validate lifetime
+      logger.warn('JWT has exp but missing iat claim - cannot validate lifetime');
+    }
+
+    // Verify the JWT signature and expiration
     const verified = jwt.verify(token, publicKey, { algorithms: ['RS256'] });
     
-    logger.info(`Request authenticated successfully for: ${verified.refill_request_id || 'unknown'}`);
+    logger.info(`Request authenticated successfully for: ${verified.refill_request_id}`);
     
     // Attach verified data to request for use in controllers
     req.verifiedData = verified;
