@@ -1,5 +1,7 @@
 const logger = require('../middleware/logger')('transactionMonitor');
 const refillTransactionService = require('./refillTransactionService');
+const config = require('../config');
+const { sendSlackAlert } = require('../utils/slackAlerts');
 
 /**
  * Transaction Monitor Service
@@ -67,11 +69,15 @@ class TransactionMonitorService {
         pendingTxns.map(tx => this.checkAndUpdateTransaction(tx))
       );
 
+      console.log('results', JSON.stringify(results, null, 2));
       // Log summary
       const successful = results.filter(r => r.status === 'fulfilled').length;
       const failed = results.filter(r => r.status === 'rejected').length;
       
       logger.info(`Monitor cycle complete: ${successful} checked, ${failed} errors`);
+
+      // Check for long-pending transactions and raise alerts
+      await this.checkAndAlertLongPending(pendingTxns, results);
 
     } catch (error) {
       logger.error(`Error in monitor cycle: ${error.message}`);
@@ -133,10 +139,111 @@ class TransactionMonitorService {
         logger.info(`Failed to check status for ${refillRequestId}: ${result.error}`);
       }
 
+      return result;
     } catch (error) {
       logger.error(`Error checking transaction ${transaction.refillRequestId}: ${error.message}`);
       throw error; // Let Promise.allSettled handle it
     }
+  }
+
+  /**
+   * Check for long-pending transactions and send grouped Slack alert
+   * Uses results from the current monitoring cycle to avoid extra DB call
+   * @param {Array} transactions - Original list of pending/processing transactions
+   * @param {Array} results - Results from Promise.allSettled (after status updates)
+   */
+  async checkAndAlertLongPending(transactions, results) {
+    try {
+      const slackWebhookUrl = config.get('slackWebhookUrl');
+      
+      // Skip if Slack webhook URL is not configured
+      if (!slackWebhookUrl) {
+        logger.debug('Slack webhook URL not configured, skipping alert');
+        return;
+      }
+
+      const pendingAlertThreshold = config.get('pendingAlertThreshold') || 1800; // Default: 30 minutes
+      const now = new Date();
+      const longPendingTxns = [];
+
+      // Iterate through results to find transactions still pending after update
+      for (let i = 0; i < transactions.length; i++) {
+        const tx = transactions[i];
+        const result = results[i];
+
+        // Get the current status from the result (post-update)
+        const currentStatus = result.value?.data?.status || tx.status;
+        
+        // Only alert for PENDING and PROCESSING statuses (not final states)
+        if (currentStatus !== 'PENDING' && currentStatus !== 'PROCESSING') {
+          continue;
+        }
+
+        // Calculate time pending based on last update
+        const updatedAt = new Date(tx.updatedAt);
+        const timePendingSec = Math.floor((now - updatedAt) / 1000);
+
+        // Check if transaction has been pending beyond threshold
+        if (timePendingSec >= pendingAlertThreshold) {
+          longPendingTxns.push({
+            refillRequestId: tx.refillRequestId,
+            status: currentStatus,
+            provider: tx.provider,
+            timePendingSec,
+            updatedAt: tx.updatedAt
+          });
+        }
+      }
+
+      // Send grouped alert if there are long-pending transactions
+      if (longPendingTxns.length > 0) {
+        logger.info(`Found ${longPendingTxns.length} long-pending refill transactions`);
+        logger.debug('Long-pending refill transactions', longPendingTxns);
+        
+        const alertMessage = this.formatPendingAlert(longPendingTxns, pendingAlertThreshold);
+        console.log('alertMessage', alertMessage);
+        
+        // Raise Slack alert
+        await sendSlackAlert(alertMessage);
+        
+        logger.info(`Slack alert sent for ${longPendingTxns.length} long-pending transactions`);
+      } else {
+        logger.debug('No long-pending transactions found');
+      }
+    } catch (error) {
+      logger.error(`Error checking/alerting long-pending transactions: ${error.message}`);
+    }
+  }
+
+  /**
+   * Format grouped Slack alert message for long-pending transactions
+   * @param {Array} longPendingTxns - List of long-pending transactions
+   * @param {number} thresholdSec - Alert threshold in seconds
+   * @returns {string} Formatted alert message
+   */
+  formatPendingAlert(longPendingTxns, thresholdSec) {
+    const thresholdMin = Math.floor(thresholdSec / 60);
+    
+    let message = `Refill Alert: ${longPendingTxns.length} transaction(s) pending for over ${thresholdMin} minutes\n\n`;
+    
+    longPendingTxns.forEach((tx, index) => {
+      const timePendingMin = Math.floor(tx.timePendingSec / 60);
+      const timePendingHrs = (tx.timePendingSec / 3600).toFixed(1);
+      
+      const timeDisplay = timePendingMin < 60 
+        ? `${timePendingMin} minutes`
+        : `${timePendingHrs} hours`;
+      
+      message += `${index + 1}. ${tx.refillRequestId}\n`;
+      message += `   • Status: \`${tx.status}\`\n`;
+      message += `   • Provider: ${tx.provider}\n`;
+      message += `   • Pending for: ${timeDisplay}\n`;
+      message += `   • Last updated: ${new Date(tx.updatedAt).toISOString()}\n\n`;
+    });
+    
+    message += `_Monitor cycle: ${new Date().toISOString()}_`;
+    
+    return message;
   }
 }
 

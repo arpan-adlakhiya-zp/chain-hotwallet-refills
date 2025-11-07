@@ -392,6 +392,7 @@ class RefillTransactionService {
             status: updateData.status || currentStatus,
             provider: providerName,
             providerTxId: providerTxId,
+            providerStatus: updateData.providerStatus || transaction.providerStatus,
             txHash: updateData.txHash || transaction.txHash,
             message: updateData.message || transaction.message,
             previousStatus: currentStatus,
@@ -409,6 +410,7 @@ class RefillTransactionService {
             status: currentStatus,
             provider: providerName,
             providerTxId: providerTxId,
+            providerStatus: transaction.providerStatus,
             txHash: transaction.txHash,
             message: transaction.message,
             updated: false

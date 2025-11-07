@@ -116,8 +116,7 @@ function authenticate(req, res, next) {
     const maxLifetime = config.get('jwtMaxLifetime') || 300; // 5 minutes default
     logger.debug(`Configured JWT max lifetime: ${maxLifetime} seconds`);
 
-    // Validate JWT lifetime BEFORE verification
-    // This ensures we reject tokens with excessive expiration times
+    // Validate JWT lifetime before verification
     if (decoded && decoded.exp && decoded.iat) {
       logger.debug(`JWT expiration time: ${new Date(decoded.exp * 1000).toISOString()}`);
       logger.debug(`JWT issued at time: ${new Date(decoded.iat * 1000).toISOString()}`);
@@ -141,8 +140,12 @@ function authenticate(req, res, next) {
       
       logger.debug(`JWT lifetime validation passed: ${jwtLifetime}s <= ${maxLifetime}s`);
     } else if (decoded && (!decoded.exp || !decoded.iat)) {
-      // JWT has no exp or no iat - we can't validate lifetime
-      logger.warn('JWT has exp but missing iat claim - cannot validate lifetime');
+      logger.error('JWT has missing exp or iat time');
+      return res.status(401).json({
+        success: false,
+        error: 'JWT has missing exp or iat time',
+        code: 'MISSING_EXP_OR_IAT_TIME'
+      });
     }
 
     // Verify the JWT signature and expiration

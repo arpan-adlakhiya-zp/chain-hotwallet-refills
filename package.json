@@ -25,6 +25,7 @@
   "dependencies": {
     "@lmnl/liminaljs": "^1.0.0",
     "@zebpay/colt": "^1.2.0",
+    "axios": "^1.13.2",
     "big.js": "^7.0.1",
     "bignumber.js": "^9.1.2",
     "cors": "^2.8.5",

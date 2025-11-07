@@ -26,6 +26,13 @@ const schema = {
                 type: 'number',
                 default: 30000
             },
+            pendingAlertThreshold: {
+                type: 'number',
+                default: 1800  // 30 minutes in seconds
+            },
+            slackWebhookUrl: {
+                type: 'string'
+            },
             logConfig: {
                 type: 'object',
                 properties: {
