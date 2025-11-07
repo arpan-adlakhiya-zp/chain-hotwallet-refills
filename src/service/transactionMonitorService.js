@@ -94,10 +94,10 @@ class TransactionMonitorService {
       const databaseService = require('./chainDb');
       
       // Get PENDING transactions
-      const pending = await databaseService.getTransactionsByStatus('PENDING', 50);
+      const pending = await databaseService.getTransactionsByStatus('PENDING');
       
       // Get PROCESSING transactions
-      const processing = await databaseService.getTransactionsByStatus('PROCESSING', 50);
+      const processing = await databaseService.getTransactionsByStatus('PROCESSING');
       
       // Combine and deduplicate
       const allPending = [...(pending || []), ...(processing || [])];

@@ -1,9 +1,28 @@
 const transactionMonitor = require('../../../service/transactionMonitorService');
 const refillTransactionService = require('../../../service/refillTransactionService');
 const databaseService = require('../../../service/chainDb');
+const config = require('../../../config');
+const { sendSlackAlert } = require('../../../utils/slackAlerts');
 
 jest.mock('../../../service/refillTransactionService');
 jest.mock('../../../service/chainDb');
+jest.mock('../../../config', () => ({
+  get: jest.fn(),
+  getSecret: jest.fn((key) => {
+    if (key === 'chainDb') {
+      return {
+        host: 'localhost',
+        port: 5432,
+        user: 'test',
+        password: 'test',
+        name: 'testdb'
+      };
+    }
+    return null;
+  }),
+  getAllConfig: jest.fn()
+}));
+jest.mock('../../../utils/slackAlerts');
 jest.mock('../../../middleware/logger');
 
 describe('TransactionMonitorService', () => {
@@ -466,6 +485,231 @@ describe('TransactionMonitorService', () => {
       await transactionMonitor.monitorPendingTransactions();
 
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalled();
+    });
+  });
+
+  describe('checkAndAlertLongPending', () => {
+    beforeEach(() => {
+      config.get.mockImplementation((key) => {
+        if (key === 'slackWebhookUrl') return 'https://hooks.slack.com/test';
+        if (key === 'pendingAlertThreshold') return 1800; // 30 minutes
+        return null;
+      });
+    });
+
+    it('should skip alert when Slack webhook URL is not configured', async () => {
+      config.get.mockReturnValue(null); // No webhook URL
+
+      const transactions = [
+        { refillRequestId: 'REQ001', status: 'PENDING', updatedAt: new Date(Date.now() - 2000 * 1000) }
+      ];
+      const results = [
+        { status: 'fulfilled', value: { data: { status: 'PENDING' } } }
+      ];
+
+      await transactionMonitor.checkAndAlertLongPending(transactions, results);
+
+      expect(sendSlackAlert).not.toHaveBeenCalled();
+    });
+
+    it('should send alert for long-pending transactions', async () => {
+      const oneHourAgo = new Date(Date.now() - 3600 * 1000);
+      const transactions = [
+        {
+          refillRequestId: 'REQ001',
+          status: 'PENDING',
+          provider: 'fireblocks',
+          updatedAt: oneHourAgo.toISOString()
+        }
+      ];
+      const results = [
+        { status: 'fulfilled', value: { data: { status: 'PENDING' } } }
+      ];
+
+      await transactionMonitor.checkAndAlertLongPending(transactions, results);
+
+      expect(sendSlackAlert).toHaveBeenCalledTimes(1);
+      const alertMessage = sendSlackAlert.mock.calls[0][0];
+      expect(alertMessage).toContain('REQ001');
+      expect(alertMessage).toContain('Refill Alert');
+    });
+
+    it('should not alert for transactions that completed during update cycle', async () => {
+      const oneHourAgo = new Date(Date.now() - 3600 * 1000);
+      const transactions = [
+        {
+          refillRequestId: 'REQ001',
+          status: 'PENDING',
+          provider: 'fireblocks',
+          updatedAt: oneHourAgo.toISOString()
+        }
+      ];
+      const results = [
+        { status: 'fulfilled', value: { data: { status: 'COMPLETED' } } } // Completed during update
+      ];
+
+      await transactionMonitor.checkAndAlertLongPending(transactions, results);
+
+      expect(sendSlackAlert).not.toHaveBeenCalled();
+    });
+
+    it('should not alert for transactions below threshold', async () => {
+      const fiveMinutesAgo = new Date(Date.now() - 300 * 1000); // 5 minutes ago
+      const transactions = [
+        {
+          refillRequestId: 'REQ001',
+          status: 'PENDING',
+          provider: 'fireblocks',
+          updatedAt: fiveMinutesAgo.toISOString()
+        }
+      ];
+      const results = [
+        { status: 'fulfilled', value: { data: { status: 'PENDING' } } }
+      ];
+
+      await transactionMonitor.checkAndAlertLongPending(transactions, results);
+
+      expect(sendSlackAlert).not.toHaveBeenCalled();
+    });
+
+    it('should group multiple long-pending transactions in single alert', async () => {
+      const oneHourAgo = new Date(Date.now() - 3600 * 1000);
+      const transactions = [
+        {
+          refillRequestId: 'REQ001',
+          status: 'PENDING',
+          provider: 'fireblocks',
+          updatedAt: oneHourAgo.toISOString()
+        },
+        {
+          refillRequestId: 'REQ002',
+          status: 'PROCESSING',
+          provider: 'liminal',
+          updatedAt: oneHourAgo.toISOString()
+        }
+      ];
+      const results = [
+        { status: 'fulfilled', value: { data: { status: 'PENDING' } } },
+        { status: 'fulfilled', value: { data: { status: 'PROCESSING' } } }
+      ];
+
+      await transactionMonitor.checkAndAlertLongPending(transactions, results);
+
+      expect(sendSlackAlert).toHaveBeenCalledTimes(1);
+      const alertMessage = sendSlackAlert.mock.calls[0][0];
+      expect(alertMessage).toContain('REQ001');
+      expect(alertMessage).toContain('REQ002');
+      expect(alertMessage).toContain('2 transaction(s)');
+    });
+
+    it('should handle errors gracefully', async () => {
+      sendSlackAlert.mockRejectedValue(new Error('Slack API error'));
+
+      const oneHourAgo = new Date(Date.now() - 3600 * 1000);
+      const transactions = [
+        {
+          refillRequestId: 'REQ001',
+          status: 'PENDING',
+          provider: 'fireblocks',
+          updatedAt: oneHourAgo.toISOString()
+        }
+      ];
+      const results = [
+        { status: 'fulfilled', value: { data: { status: 'PENDING' } } }
+      ];
+
+      // Should not throw
+      await expect(transactionMonitor.checkAndAlertLongPending(transactions, results))
+        .resolves.not.toThrow();
+    });
+
+    it('should use custom pendingAlertThreshold from config', async () => {
+      config.get.mockImplementation((key) => {
+        if (key === 'slackWebhookUrl') return 'https://hooks.slack.com/test';
+        if (key === 'pendingAlertThreshold') return 600; // 10 minutes
+        return null;
+      });
+
+      const fifteenMinutesAgo = new Date(Date.now() - 900 * 1000);
+      const transactions = [
+        {
+          refillRequestId: 'REQ001',
+          status: 'PENDING',
+          provider: 'fireblocks',
+          updatedAt: fifteenMinutesAgo.toISOString()
+        }
+      ];
+      const results = [
+        { status: 'fulfilled', value: { data: { status: 'PENDING' } } }
+      ];
+
+      await transactionMonitor.checkAndAlertLongPending(transactions, results);
+
+      expect(sendSlackAlert).toHaveBeenCalled();
+    });
+  });
+
+  describe('formatPendingAlert', () => {
+    it('should format alert message correctly for single transaction', () => {
+      const longPendingTxns = [
+        {
+          refillRequestId: 'REQ001',
+          status: 'PENDING',
+          provider: 'fireblocks',
+          timePendingSec: 3600, // 1 hour
+          updatedAt: new Date(Date.now() - 3600 * 1000).toISOString()
+        }
+      ];
+
+      const message = transactionMonitor.formatPendingAlert(longPendingTxns, 1800);
+
+      expect(message).toContain('REQ001');
+      expect(message).toContain('PENDING');
+      expect(message).toContain('fireblocks');
+      expect(message).toContain('1.0 hours');
+      expect(message).toContain('Refill Alert: 1 transaction(s)');
+    });
+
+    it('should format alert message correctly for multiple transactions', () => {
+      const longPendingTxns = [
+        {
+          refillRequestId: 'REQ001',
+          status: 'PENDING',
+          provider: 'fireblocks',
+          timePendingSec: 3600,
+          updatedAt: new Date(Date.now() - 3600 * 1000).toISOString()
+        },
+        {
+          refillRequestId: 'REQ002',
+          status: 'PROCESSING',
+          provider: 'liminal',
+          timePendingSec: 1800,
+          updatedAt: new Date(Date.now() - 1800 * 1000).toISOString()
+        }
+      ];
+
+      const message = transactionMonitor.formatPendingAlert(longPendingTxns, 1800);
+
+      expect(message).toContain('REQ001');
+      expect(message).toContain('REQ002');
+      expect(message).toContain('2 transaction(s)');
+    });
+
+    it('should display minutes for transactions under 1 hour', () => {
+      const longPendingTxns = [
+        {
+          refillRequestId: 'REQ001',
+          status: 'PENDING',
+          provider: 'fireblocks',
+          timePendingSec: 1800, // 30 minutes
+          updatedAt: new Date(Date.now() - 1800 * 1000).toISOString()
+        }
+      ];
+
+      const message = transactionMonitor.formatPendingAlert(longPendingTxns, 1800);
+
+      expect(message).toContain('30 minutes');
+      expect(message).not.toContain('hours');
     });
   });
 });

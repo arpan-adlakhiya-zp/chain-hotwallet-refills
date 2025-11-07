@@ -222,24 +222,14 @@ describe('RefillTransaction Helper', () => {
 
       db.RefillTransaction.findAll = jest.fn().mockResolvedValue(mockTransactions);
 
-      const result = await refillTransactionHelper.getTransactionsByStatus('PENDING', 50);
+      const result = await refillTransactionHelper.getTransactionsByStatus('PENDING');
 
       expect(db.RefillTransaction.findAll).toHaveBeenCalledWith({
         where: { status: 'PENDING' },
-        limit: 50,
         order: [['createdAt', 'ASC']]
       });
       expect(result).toEqual(mockTransactions);
       expect(result).toHaveLength(2);
-    });
-
-    it('should use default limit of 100', async () => {
-      db.RefillTransaction.findAll = jest.fn().mockResolvedValue([]);
-
-      await refillTransactionHelper.getTransactionsByStatus('PROCESSING');
-
-      const callArgs = db.RefillTransaction.findAll.mock.calls[0][0];
-      expect(callArgs.limit).toBe(100);
     });
 
     it('should order by createdAt ASC (oldest first)', async () => {

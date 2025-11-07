@@ -55,11 +55,12 @@ describe('Authentication Middleware', () => {
         asset_symbol: 'BTC'
       };
 
-      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256' });
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '5m' });
       mockReq.rawBody = token;
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -113,11 +114,12 @@ describe('Authentication Middleware', () => {
         privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
       });
 
-      const token = jwt.sign(payload, wrongPrivateKey, { algorithm: 'RS256' });
+      const token = jwt.sign(payload, wrongPrivateKey, { algorithm: 'RS256', expiresIn: '5m' });
       mockReq.rawBody = token;
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -134,16 +136,16 @@ describe('Authentication Middleware', () => {
 
     it('should reject expired JWT token', () => {
       const payload = {
-        refill_request_id: 'REQ003',
-        exp: Math.floor(Date.now() / 1000) - 3600 // Expired 1 hour ago
+        refill_request_id: 'REQ003'
       };
 
-      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', noTimestamp: true });
+      // Create a token that expires in -1 hour (already expired)
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '-1h' });
       mockReq.rawBody = token;
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
-      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
+      config.get.mockReturnValueOnce(3600); // jwtMaxLifetime - must be >= token lifetime (1 hour)
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -247,15 +249,12 @@ describe('Authentication Middleware', () => {
     });
 
     it('should accept JWT with valid lifetime (≤ 5 minutes)', () => {
-      const now = Math.floor(Date.now() / 1000);
       const payload = {
         refill_request_id: 'REQ_VALID_LIFETIME',
-        wallet_address: '0x123',
-        iat: now,
-        exp: now + 300 // Exactly 5 minutes lifetime
+        wallet_address: '0x123'
       };
 
-      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', noTimestamp: true });
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '5m' });
       mockReq.rawBody = token;
 
       config.get.mockReturnValueOnce(undefined); // authEnabled (not false, so auth is enabled)
@@ -271,15 +270,12 @@ describe('Authentication Middleware', () => {
     });
 
     it('should accept JWT with lifetime less than maximum', () => {
-      const now = Math.floor(Date.now() / 1000);
       const payload = {
         refill_request_id: 'REQ_SHORT_LIFETIME',
-        wallet_address: '0x123',
-        iat: now,
-        exp: now + 60 // 1 minute lifetime (well within 5 minute max)
+        wallet_address: '0x123'
       };
 
-      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', noTimestamp: true });
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '1m' });
       mockReq.rawBody = token;
 
       config.get.mockReturnValueOnce(undefined); // authEnabled (not false, so auth is enabled)
@@ -294,15 +290,12 @@ describe('Authentication Middleware', () => {
     });
 
     it('should allow custom jwtMaxLifetime configuration', () => {
-      const now = Math.floor(Date.now() / 1000);
       const payload = {
         refill_request_id: 'REQ_CUSTOM_LIFETIME',
-        wallet_address: '0x123',
-        iat: now,
-        exp: now + 600 // 10 minutes lifetime
+        wallet_address: '0x123'
       };
 
-      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', noTimestamp: true });
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '10m' });
       mockReq.rawBody = token;
 
       config.get.mockReturnValueOnce(undefined); // authEnabled (not false, so auth is enabled)
@@ -324,10 +317,11 @@ describe('Authentication Middleware', () => {
         refill_amount: '10.0'
       };
 
-      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256' });
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '5m' });
       mockReq.rawBody = token;
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -345,9 +339,10 @@ describe('Authentication Middleware', () => {
     it('should use authentication when authEnabled is not set (defaults to enabled)', () => {
       config.get.mockReturnValueOnce(undefined); // authEnabled not set (defaults to enabled)
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
 
       const payload = { refill_request_id: 'REQ005' };
-      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256' });
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '5m' });
       mockReq.rawBody = token;
 
       authenticate(mockReq, mockRes, mockNext);
@@ -380,12 +375,13 @@ describe('Authentication Middleware', () => {
         user: 'test-user'
       };
 
-      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256' });
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '5m' });
       mockReq.headers.authorization = `Bearer ${token}`;
       mockReq.params = { refill_request_id: 'REQ007' };
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
 
       authenticate(mockReq, mockRes, mockNext);
 

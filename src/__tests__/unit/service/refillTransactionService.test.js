@@ -608,6 +608,74 @@ describe('RefillTransactionService', () => {
       expect(result.data.updated).toBe(true);
       expect(result.success).toBe(true);
     });
+
+    it('should return error when provider not found in providers map', async () => {
+      const transaction = {
+        refillRequestId: 'REQ001',
+        provider: 'unknown_provider',
+        providerTxId: 'tx-123'
+      };
+
+      providerService.initialize = jest.fn();
+      providerService.getProviders = jest.fn().mockReturnValue(new Map()); // Empty map
+
+      const result = await refillTransactionService.checkAndUpdateTransactionFromProvider(transaction);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('PROVIDER_NOT_AVAILABLE');
+      expect(result.error).toContain('unknown_provider');
+    });
+
+    it('should return error when provider fetch fails', async () => {
+      const transaction = {
+        refillRequestId: 'REQ002',
+        provider: 'fireblocks',
+        providerTxId: 'fb-123',
+        status: 'PROCESSING'
+      };
+
+      const mockProvider = createMockProvider('fireblocks');
+      providerService.initialize = jest.fn();
+      providerService.getProviders = jest.fn().mockReturnValue(new Map([['fireblocks', mockProvider]]));
+
+      mockProvider.getTransactionById.mockRejectedValue(new Error('Provider API error'));
+
+      const result = await refillTransactionService.checkAndUpdateTransactionFromProvider(transaction);
+
+      // Should return success with current status when provider fetch fails
+      expect(result.success).toBe(true);
+      expect(result.data.refillRequestId).toBe('REQ002');
+    });
+
+    it('should return error when unknown provider type is used', async () => {
+      const transaction = {
+        refillRequestId: 'REQ003',
+        provider: 'custom_provider',
+        providerTxId: 'tx-456'
+      };
+
+      const mockProvider = createMockProvider('custom_provider');
+      providerService.initialize = jest.fn();
+      providerService.getProviders = jest.fn().mockReturnValue(new Map([['custom_provider', mockProvider]]));
+
+      const result = await refillTransactionService.checkAndUpdateTransactionFromProvider(transaction);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('UNKNOWN_PROVIDER');
+      expect(result.error).toContain('custom_provider');
+    });
+
+    it('should handle error in getTransactionStatusFromDB catch block', async () => {
+      jest.spyOn(refillTransactionService, 'getRefillTransactionByRequestId').mockRejectedValue(
+        new Error('Database connection failed')
+      );
+
+      const result = await refillTransactionService.getTransactionStatusFromDB('REQ001');
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('STATUS_CHECK_ERROR');
+      expect(result.data.details).toContain('Database connection failed');
+    });
   });
 });
 

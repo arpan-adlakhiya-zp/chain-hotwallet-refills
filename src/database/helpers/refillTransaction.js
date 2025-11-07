@@ -64,10 +64,9 @@ function getPendingTransactionByAssetId(assetId) {
  * @param {number} limit - Number of records to return
  * @returns {Promise<Array>} Array of transactions
  */
-function getTransactionsByStatus(status, limit = 100) {
+function getTransactionsByStatus(status) {
   return db.RefillTransaction.findAll({
     where: { status: status },
-    limit: limit,
     order: [['createdAt', 'ASC']] // Oldest first for monitoring
   });
 }

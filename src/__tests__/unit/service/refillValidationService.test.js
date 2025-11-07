@@ -1,8 +1,10 @@
 const refillValidationService = require('../../../service/refillValidationService');
 const databaseService = require('../../../service/chainDb');
+const providerService = require('../../../service/providerService');
 const BigNumber = require('bignumber.js');
 
 jest.mock('../../../service/chainDb');
+jest.mock('../../../service/providerService');
 jest.mock('../../../middleware/logger');
 
 describe('RefillValidationService', () => {
@@ -721,6 +723,239 @@ describe('RefillValidationService', () => {
       expect(result.error).toContain('seconds before requesting another refill');
       expect(result.data.remainingCooldownSeconds).toBeGreaterThan(1100);  // ~20 minutes remaining
       expect(result.data.remainingCooldownSeconds).toBeLessThan(1300);
+    });
+  });
+
+  describe('validateRefillRequest', () => {
+    const mockRefillData = {
+      refill_request_id: 'REQ001',
+      wallet_address: '0xhot123',
+      asset_symbol: 'BTC',
+      asset_address: 'native',
+      chain_name: 'Bitcoin',
+      refill_amount: '1.0',
+      refill_sweep_wallet: '0xcold456'
+    };
+
+    const mockBlockchain = {
+      id: 1,
+      name: 'Bitcoin',
+      symbol: 'BTC',
+      chainId: '0',
+      nativeAssetSymbol: 'BTC'
+    };
+
+    const mockAsset = createMockAsset({
+      id: 1,
+      symbol: 'BTC',
+      decimals: 8,
+      contractAddress: 'native',
+      refillSweepWallet: '0xcold456',
+      sweepWalletConfig: { fireblocks: { vaultId: '0', assetId: 'BTC' } },
+      hotWalletConfig: { fireblocks: { vaultId: '1' } }
+    });
+
+    const mockWallet = createMockWallet({
+      id: 1,
+      address: '0xhot123',
+      walletType: 'hot'
+    });
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      // Mock all individual validation methods to succeed by default
+      jest.spyOn(refillValidationService, 'validateAsset').mockResolvedValue({
+        success: true,
+        data: { asset: mockAsset }
+      });
+      jest.spyOn(refillValidationService, 'validateNoPendingRefill').mockResolvedValue({
+        success: true
+      });
+      jest.spyOn(refillValidationService, 'validateCooldownPeriod').mockResolvedValue({
+        success: true
+      });
+      jest.spyOn(refillValidationService, 'validateHotWalletAddress').mockReturnValue({
+        success: true,
+        data: { walletAddress: '0xhot123' }
+      });
+      jest.spyOn(refillValidationService, 'validateRefillSweepWallet').mockResolvedValue({
+        success: true
+      });
+      jest.spyOn(refillValidationService, 'validateColdWalletBalance').mockResolvedValue({
+        success: true,
+        data: {}
+      });
+      jest.spyOn(refillValidationService, 'validateHotWalletNeedsRefill').mockResolvedValue({
+        success: true,
+        data: {
+          wallet: mockWallet,
+          currentBalance: '50000000',
+          targetBalance: '100000000',
+          triggerThreshold: '50000000',
+          refillAmountAtomic: '100000000'
+        }
+      });
+    });
+
+    it('should successfully validate a complete refill request', async () => {
+      databaseService.getBlockchainByName.mockResolvedValue(mockBlockchain);
+      jest.spyOn(providerService, 'getTokenProvider').mockResolvedValue(mockProvider);
+
+      const result = await refillValidationService.validateRefillRequest(mockRefillData);
+
+      expect(result.success).toBe(true);
+      expect(result.data.provider).toBe(mockProvider);
+      expect(result.data.details.wallet.id).toBe(1);
+      expect(result.data.details.asset.id).toBe(1);
+      expect(result.data.details.blockchain.id).toBe(1);
+    });
+
+    it('should return error when blockchain not found', async () => {
+      databaseService.getBlockchainByName.mockResolvedValue(null);
+
+      const result = await refillValidationService.validateRefillRequest(mockRefillData);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('BLOCKCHAIN_NOT_FOUND');
+      expect(result.data.chainName).toBe('Bitcoin');
+    });
+
+    it('should return error when asset validation fails', async () => {
+      databaseService.getBlockchainByName.mockResolvedValue(mockBlockchain);
+      refillValidationService.validateAsset.mockResolvedValue({
+        success: false,
+        code: 'ASSET_NOT_FOUND',
+        error: 'Asset not found'
+      });
+
+      const result = await refillValidationService.validateRefillRequest(mockRefillData);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('ASSET_NOT_FOUND');
+    });
+
+    it('should return error when pending refill exists', async () => {
+      databaseService.getBlockchainByName.mockResolvedValue(mockBlockchain);
+      refillValidationService.validateNoPendingRefill.mockResolvedValue({
+        success: false,
+        code: 'REFILL_IN_PROGRESS',
+        error: 'Refill in progress'
+      });
+
+      const result = await refillValidationService.validateRefillRequest(mockRefillData);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('REFILL_IN_PROGRESS');
+    });
+
+    it('should return error when cooldown period is active', async () => {
+      databaseService.getBlockchainByName.mockResolvedValue(mockBlockchain);
+      refillValidationService.validateCooldownPeriod.mockResolvedValue({
+        success: false,
+        code: 'COOLDOWN_PERIOD_ACTIVE',
+        error: 'Cooldown active'
+      });
+
+      const result = await refillValidationService.validateRefillRequest(mockRefillData);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('COOLDOWN_PERIOD_ACTIVE');
+    });
+
+    it('should return error when hot wallet address validation fails', async () => {
+      databaseService.getBlockchainByName.mockResolvedValue(mockBlockchain);
+      refillValidationService.validateHotWalletAddress.mockReturnValue({
+        success: false,
+        code: 'HOT_WALLET_ADDRESS_VALIDATION_ERROR',
+        error: 'Wallet address mismatch'
+      });
+
+      const result = await refillValidationService.validateRefillRequest(mockRefillData);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('HOT_WALLET_ADDRESS_VALIDATION_ERROR');
+    });
+
+    it('should return error when sweep wallet validation fails', async () => {
+      databaseService.getBlockchainByName.mockResolvedValue(mockBlockchain);
+      refillValidationService.validateRefillSweepWallet.mockResolvedValue({
+        success: false,
+        code: 'SWEEP_WALLET_MISMATCH',
+        error: 'Sweep wallet mismatch'
+      });
+
+      const result = await refillValidationService.validateRefillRequest(mockRefillData);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('SWEEP_WALLET_MISMATCH');
+    });
+
+    it('should return error when provider not available', async () => {
+      databaseService.getBlockchainByName.mockResolvedValue(mockBlockchain);
+      // Ensure all previous validations pass
+      refillValidationService.validateAsset.mockResolvedValue({
+        success: true,
+        data: { asset: mockAsset }
+      });
+      refillValidationService.validateNoPendingRefill.mockResolvedValue({ success: true });
+      refillValidationService.validateCooldownPeriod.mockResolvedValue({ success: true });
+      refillValidationService.validateHotWalletAddress.mockReturnValue({
+        success: true,
+        data: { walletAddress: '0xhot123' }
+      });
+      refillValidationService.validateRefillSweepWallet.mockResolvedValue({ success: true });
+      
+      // Mock providerService.getTokenProvider to return null using spyOn
+      jest.spyOn(providerService, 'getTokenProvider').mockResolvedValue(null);
+      // Mock getProviders to return a Map so availableProviders can be computed
+      jest.spyOn(providerService, 'getProviders').mockReturnValue(new Map([['fireblocks', mockProvider]]));
+
+      const result = await refillValidationService.validateRefillRequest(mockRefillData);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('NO_PROVIDER_AVAILABLE');
+      expect(result.data.chainName).toBe('Bitcoin');
+      expect(result.data.assetSymbol).toBe('BTC');
+    });
+
+    it('should return error when cold wallet balance validation fails', async () => {
+      databaseService.getBlockchainByName.mockResolvedValue(mockBlockchain);
+      jest.spyOn(providerService, 'getTokenProvider').mockResolvedValue(mockProvider);
+      refillValidationService.validateColdWalletBalance.mockResolvedValue({
+        success: false,
+        code: 'INSUFFICIENT_BALANCE',
+        error: 'Insufficient balance'
+      });
+
+      const result = await refillValidationService.validateRefillRequest(mockRefillData);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('INSUFFICIENT_BALANCE');
+    });
+
+    it('should return error when hot wallet needs refill validation fails', async () => {
+      databaseService.getBlockchainByName.mockResolvedValue(mockBlockchain);
+      jest.spyOn(providerService, 'getTokenProvider').mockResolvedValue(mockProvider);
+      refillValidationService.validateHotWalletNeedsRefill.mockResolvedValue({
+        success: false,
+        code: 'SUFFICIENT_BALANCE',
+        error: 'Hot wallet has sufficient balance'
+      });
+
+      const result = await refillValidationService.validateRefillRequest(mockRefillData);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('SUFFICIENT_BALANCE');
+    });
+
+    it('should handle errors during validation', async () => {
+      databaseService.getBlockchainByName.mockRejectedValue(new Error('Database error'));
+
+      const result = await refillValidationService.validateRefillRequest(mockRefillData);
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('VALIDATION_ERROR');
+      expect(result.data.details).toContain('Database error');
     });
   });
 });

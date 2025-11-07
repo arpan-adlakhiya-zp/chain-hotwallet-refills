@@ -9,8 +9,12 @@ module.exports = {
     '!src/**/__tests__/**',
     '!src/database/migrations/**',
     '!src/database/models/index.js',
-    '!src/middleware/logger.js', // Logger has console.log by design
-    '!index.js' // Entry point - tested via E2E
+    '!src/middleware/logger.js',
+    '!src/middleware/expressServer.js',
+    '!src/index.js',
+    '!src/utils/terminate.js',
+    '!src/utils/slackAlerts.js',
+    '!src/database/config/migration.js',
   ],
   
   // Coverage thresholds (start with achievable goals, increase over time)

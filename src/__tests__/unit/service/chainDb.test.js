@@ -231,19 +231,11 @@ describe('DatabaseService (chainDb)', () => {
       ];
       refillTransactionHelper.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
-      const result = await databaseService.getTransactionsByStatus('PENDING', 50);
+      const result = await databaseService.getTransactionsByStatus('PENDING');
 
       expect(mockSequelize.authenticate).toHaveBeenCalled();
-      expect(refillTransactionHelper.getTransactionsByStatus).toHaveBeenCalledWith('PENDING', 50);
+      expect(refillTransactionHelper.getTransactionsByStatus).toHaveBeenCalledWith('PENDING');
       expect(result).toEqual(mockTransactions);
-    });
-
-    it('should use default limit when not specified', async () => {
-      refillTransactionHelper.getTransactionsByStatus.mockResolvedValue([]);
-
-      await databaseService.getTransactionsByStatus('PROCESSING');
-
-      expect(refillTransactionHelper.getTransactionsByStatus).toHaveBeenCalledWith('PROCESSING', 100);
     });
   });
 
@@ -279,6 +271,64 @@ describe('DatabaseService (chainDb)', () => {
 
       await expect(databaseService.getLastSuccessfulRefillByAssetId(1))
         .rejects.toThrow('Database error');
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should throw error when getWalletByAddress fails', async () => {
+      walletHelper.getWalletByAddress.mockRejectedValue(new Error('Wallet fetch failed'));
+
+      await expect(databaseService.getWalletByAddress('0x123'))
+        .rejects.toThrow('Wallet fetch failed');
+    });
+
+    it('should throw error when getAssetDetails fails', async () => {
+      assetHelper.getAssetById.mockRejectedValue(new Error('Asset fetch failed'));
+
+      await expect(databaseService.getAssetDetails(1))
+        .rejects.toThrow('Asset fetch failed');
+    });
+
+    it('should throw error when getAssetBySymbolAndBlockchain fails', async () => {
+      assetHelper.getAssetBySymbolAndBlockchain.mockRejectedValue(new Error('Asset lookup failed'));
+
+      await expect(databaseService.getAssetBySymbolAndBlockchain('BTC', 1))
+        .rejects.toThrow('Asset lookup failed');
+    });
+
+    it('should throw error when createRefillTransaction fails', async () => {
+      refillTransactionHelper.createRefillTransaction.mockRejectedValue(new Error('Transaction creation failed'));
+
+      await expect(databaseService.createRefillTransaction({}))
+        .rejects.toThrow('Transaction creation failed');
+    });
+
+    it('should throw error when updateRefillTransaction fails', async () => {
+      refillTransactionHelper.updateRefillTransaction.mockRejectedValue(new Error('Transaction update failed'));
+
+      await expect(databaseService.updateRefillTransaction('REQ001', {}))
+        .rejects.toThrow('Transaction update failed');
+    });
+
+    it('should throw error when getRefillTransactionByRequestId fails', async () => {
+      refillTransactionHelper.getRefillTransactionByRequestId.mockRejectedValue(new Error('Transaction fetch failed'));
+
+      await expect(databaseService.getRefillTransactionByRequestId('REQ001'))
+        .rejects.toThrow('Transaction fetch failed');
+    });
+
+    it('should throw error when getPendingTransactionByAssetId fails', async () => {
+      refillTransactionHelper.getPendingTransactionByAssetId.mockRejectedValue(new Error('Pending transaction fetch failed'));
+
+      await expect(databaseService.getPendingTransactionByAssetId(1))
+        .rejects.toThrow('Pending transaction fetch failed');
+    });
+
+    it('should throw error when getTransactionsByStatus fails', async () => {
+      refillTransactionHelper.getTransactionsByStatus.mockRejectedValue(new Error('Status query failed'));
+
+      await expect(databaseService.getTransactionsByStatus('PENDING'))
+        .rejects.toThrow('Status query failed');
     });
   });
 });

@@ -1,10 +1,10 @@
-const config = require('./src/config');
-const logger = require('./src/middleware/logger')('index');
-const ExpressServer = require('./src/middleware/expressServer');
-const onTerminate = require('./src/utils/terminate');
-const pjson = require('./package.json');
-const databaseService = require('./src/service/chainDb');
-const transactionMonitor = require('./src/service/transactionMonitorService');
+const config = require('./config');
+const logger = require('./middleware/logger')('index');
+const ExpressServer = require('./middleware/expressServer');
+const onTerminate = require('./utils/terminate');
+const pjson = require('../package.json');
+const databaseService = require('./service/chainDb');
+const transactionMonitor = require('./service/transactionMonitorService');
 
 let expressServer = null;
 

@@ -94,7 +94,7 @@ class RefillValidationService {
           data: {
             chainName: refillData.chain_name,
             assetSymbol: refillData.asset_symbol,
-            availableProviders: Array.from(this.providers.keys())
+            availableProviders: Array.from(providerService.getProviders().keys())
           }
         };
       }

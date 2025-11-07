@@ -130,10 +130,10 @@ class DatabaseService {
     }
   }
 
-  async getTransactionsByStatus(status, limit = 100) {
+  async getTransactionsByStatus(status) {
     try {
       await this.connect();
-      return await refillTransactionHelper.getTransactionsByStatus(status, limit);
+      return await refillTransactionHelper.getTransactionsByStatus(status);
     } catch (error) {
       logger.error(`Error getting transactions by status: ${error.message}`);
       throw error;
