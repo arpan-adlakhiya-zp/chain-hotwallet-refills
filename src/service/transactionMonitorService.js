@@ -162,7 +162,7 @@ class TransactionMonitorService {
         return;
       }
 
-      const pendingAlertThreshold = config.get('pendingAlertThreshold') || 1800; // Default: 30 minutes
+      const pendingAlertThresholdInSeconds = config.get('pendingAlertThresholdInSeconds') || 1800; // Default: 30 minutes
       const now = new Date();
       const longPendingTxns = [];
 
@@ -184,7 +184,7 @@ class TransactionMonitorService {
         const timePendingSec = Math.floor((now - updatedAt) / 1000);
 
         // Check if transaction has been pending beyond threshold
-        if (timePendingSec >= pendingAlertThreshold) {
+        if (timePendingSec >= pendingAlertThresholdInSeconds) {
           longPendingTxns.push({
             refillRequestId: tx.refillRequestId,
             status: currentStatus,
@@ -200,7 +200,7 @@ class TransactionMonitorService {
         logger.info(`Found ${longPendingTxns.length} long-pending refill transactions`);
         logger.debug('Long-pending refill transactions', longPendingTxns);
         
-        const alertMessage = this.formatPendingAlert(longPendingTxns, pendingAlertThreshold);
+        const alertMessage = this.formatPendingAlert(longPendingTxns, pendingAlertThresholdInSeconds);
         console.log('alertMessage', alertMessage);
         
         // Raise Slack alert

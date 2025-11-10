@@ -60,7 +60,7 @@ describe('Authentication Middleware', () => {
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
-      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetimeInSeconds
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -119,7 +119,7 @@ describe('Authentication Middleware', () => {
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
-      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetimeInSeconds
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -145,7 +145,7 @@ describe('Authentication Middleware', () => {
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
-      config.get.mockReturnValueOnce(3600); // jwtMaxLifetime - must be >= token lifetime (1 hour)
+      config.get.mockReturnValueOnce(3600); // jwtMaxLifetimeInSeconds - must be >= token lifetime (1 hour)
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -227,7 +227,7 @@ describe('Authentication Middleware', () => {
 
       config.get.mockReturnValueOnce(undefined); // authEnabled (not false, so auth is enabled)
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
-      config.get.mockReturnValueOnce(300); // jwtMaxLifetime (5 minutes)
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetimeInSeconds (5 minutes)
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -259,7 +259,7 @@ describe('Authentication Middleware', () => {
 
       config.get.mockReturnValueOnce(undefined); // authEnabled (not false, so auth is enabled)
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
-      config.get.mockReturnValueOnce(300); // jwtMaxLifetime (5 minutes)
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetimeInSeconds (5 minutes)
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -280,7 +280,7 @@ describe('Authentication Middleware', () => {
 
       config.get.mockReturnValueOnce(undefined); // authEnabled (not false, so auth is enabled)
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
-      config.get.mockReturnValueOnce(300); // jwtMaxLifetime (5 minutes)
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetimeInSeconds (5 minutes)
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -289,7 +289,7 @@ describe('Authentication Middleware', () => {
       expect(mockRes.status).not.toHaveBeenCalled();
     });
 
-    it('should allow custom jwtMaxLifetime configuration', () => {
+    it('should allow custom jwtMaxLifetimeInSeconds configuration', () => {
       const payload = {
         refill_request_id: 'REQ_CUSTOM_LIFETIME',
         wallet_address: '0x123'
@@ -300,7 +300,7 @@ describe('Authentication Middleware', () => {
 
       config.get.mockReturnValueOnce(undefined); // authEnabled (not false, so auth is enabled)
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
-      config.get.mockReturnValueOnce(600); // jwtMaxLifetime (10 minutes - custom)
+      config.get.mockReturnValueOnce(600); // jwtMaxLifetimeInSeconds (10 minutes - custom)
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -321,7 +321,7 @@ describe('Authentication Middleware', () => {
       mockReq.rawBody = token;
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
-      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetimeInSeconds
 
       authenticate(mockReq, mockRes, mockNext);
 
@@ -339,7 +339,7 @@ describe('Authentication Middleware', () => {
     it('should use authentication when authEnabled is not set (defaults to enabled)', () => {
       config.get.mockReturnValueOnce(undefined); // authEnabled not set (defaults to enabled)
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
-      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetimeInSeconds
 
       const payload = { refill_request_id: 'REQ005' };
       const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '5m' });
@@ -381,7 +381,7 @@ describe('Authentication Middleware', () => {
 
       config.get.mockReturnValueOnce(true); // authEnabled
       config.get.mockReturnValueOnce(publicKey); // authPublicKey
-      config.get.mockReturnValueOnce(300); // jwtMaxLifetime
+      config.get.mockReturnValueOnce(300); // jwtMaxLifetimeInSeconds
 
       authenticate(mockReq, mockRes, mockNext);
 

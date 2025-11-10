@@ -254,7 +254,7 @@ describe('Refill Flow Integration Tests', () => {
         error: 'Refill transaction already exists',
         code: 'TRANSACTION_EXISTS',
         data: {
-          transaction: { id: 123, status: 'COMPLETED' }
+          transaction: { refillRequestId: 'REQ_DUPLICATE', status: 'COMPLETED' }
         }
       });
 

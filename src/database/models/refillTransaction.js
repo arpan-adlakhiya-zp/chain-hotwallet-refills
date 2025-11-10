@@ -15,19 +15,14 @@ module.exports = (sequelize) => {
   }
 
   RefillTransaction.init({
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true
-    },
-    
     // External system reference (used as external_tx_id for idempotency)
+    // Primary key to ensure only one record per refill request ID
     refillRequestId: {
       field: 'refill_request_id',
       type: DataTypes.STRING(255),
       allowNull: false,
-      unique: true,
-      comment: 'External system request ID (also used as external_tx_id)'
+      primaryKey: true,
+      comment: 'External system request ID (also used as external_tx_id) - Primary key for idempotency'
     },
     
     // Provider information
@@ -138,10 +133,7 @@ module.exports = (sequelize) => {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
     indexes: [
-      {
-        name: 'idx_refill_transactions_refill_request_id',
-        fields: ['refill_request_id']
-      },
+      // Note: refill_request_id is the primary key, so it already has an index
       {
         name: 'idx_refill_transactions_provider_tx_id',
         fields: ['provider_tx_id']

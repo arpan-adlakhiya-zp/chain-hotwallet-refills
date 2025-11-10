@@ -247,7 +247,16 @@
 				"packages": {},
 				"requests": {},
 				"exec": [
-					""
+					"// Define the URL to fetch data from",
+					"const dataUrl = \"https://raw.githubusercontent.com/kjur/jsrsasign/refs/heads/master/jsrsasign-all-min.js\";",
+					"",
+					"pm.sendRequest(dataUrl, function (err, res) {",
+					"  if (err) {",
+					"    console.log(err);",
+					"  } else {",
+					"    pm.collectionVariables.set(\"jsrsasign-js\", res.text());",
+					"  }",
+					"});"
 				]
 			}
 		},

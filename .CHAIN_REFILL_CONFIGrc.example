@@ -1,0 +1,27 @@
+{
+  "serverPort": 3001,
+  "logConfig": {
+    "logFile": "chainHotWalletRefills.log",
+    "logLevel": "debug",
+    "logPath": "logs",
+    "logAdapter": "pino",
+    "service": "ChainHotWalletRefills",
+    "prettyPrint": true,
+    "format": "json"
+  },
+  "providers": {
+    "liminal": {
+      "env": "<liminal_env>"
+    },
+    "fireblocks": {
+      "apiBaseUrl": "<fireblocks_url>"
+    }
+  },
+  "authEnabled": false, // If this is set to true, update public key in "authPublicKey"
+  "authPublicKey": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----",
+  "cronEnabled": true,
+  "cronIntervalInMs": 60000, // default: 60 seconds
+  "jwtMaxLifetimeInSeconds": 300, // default: 5 minutes
+  "slackWebhookUrl": "<slack_webhook_url>",
+  "pendingAlertThresholdInSeconds": 1800 // default: 30 minutes
+}

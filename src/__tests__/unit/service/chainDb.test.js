@@ -164,7 +164,7 @@ describe('DatabaseService (chainDb)', () => {
         provider: 'fireblocks',
         assetId: 1
       };
-      const mockTransaction = { id: 123, ...transactionData };
+      const mockTransaction = { ...transactionData };
       
       refillTransactionHelper.createRefillTransaction.mockResolvedValue(mockTransaction);
 
@@ -191,7 +191,7 @@ describe('DatabaseService (chainDb)', () => {
 
   describe('getRefillTransactionByRequestId', () => {
     it('should connect and call transaction helper', async () => {
-      const mockTransaction = { id: 123, refillRequestId: 'REQ001' };
+      const mockTransaction = { refillRequestId: 'REQ001' };
       refillTransactionHelper.getRefillTransactionByRequestId.mockResolvedValue(mockTransaction);
 
       const result = await databaseService.getRefillTransactionByRequestId('REQ001');
@@ -204,7 +204,7 @@ describe('DatabaseService (chainDb)', () => {
 
   describe('getPendingTransactionByAssetId', () => {
     it('should connect and call transaction helper', async () => {
-      const mockTransaction = { id: 123, assetId: 1, status: 'PENDING' };
+      const mockTransaction = { refillRequestId: 'REQ001', assetId: 1, status: 'PENDING' };
       refillTransactionHelper.getPendingTransactionByAssetId.mockResolvedValue(mockTransaction);
 
       const result = await databaseService.getPendingTransactionByAssetId(1);
@@ -226,8 +226,8 @@ describe('DatabaseService (chainDb)', () => {
   describe('getTransactionsByStatus', () => {
     it('should connect and call transaction helper', async () => {
       const mockTransactions = [
-        { id: 1, status: 'PENDING' },
-        { id: 2, status: 'PENDING' }
+        { refillRequestId: 'REQ001', status: 'PENDING' },
+        { refillRequestId: 'REQ002', status: 'PENDING' }
       ];
       refillTransactionHelper.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
@@ -242,7 +242,7 @@ describe('DatabaseService (chainDb)', () => {
   describe('getLastSuccessfulRefillByAssetId', () => {
     it('should connect and call transaction helper', async () => {
       const mockTransaction = {
-        id: 123,
+        refillRequestId: 'REQ001',
         assetId: 1,
         status: 'COMPLETED',
         updatedAt: '2025-11-06T08:00:00Z'

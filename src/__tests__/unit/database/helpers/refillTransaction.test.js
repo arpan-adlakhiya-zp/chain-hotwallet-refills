@@ -19,7 +19,7 @@ describe('RefillTransaction Helper', () => {
         assetId: 1
       };
 
-      const createdTransaction = { id: 123, ...transactionData };
+      const createdTransaction = { ...transactionData };
       db.RefillTransaction.create = jest.fn().mockResolvedValue(createdTransaction);
 
       const result = await refillTransactionHelper.createRefillTransaction(transactionData);
@@ -35,7 +35,7 @@ describe('RefillTransaction Helper', () => {
         amountAtomic: '500000'
       };
 
-      db.RefillTransaction.create = jest.fn().mockResolvedValue({ id: 124 });
+      db.RefillTransaction.create = jest.fn().mockResolvedValue({ refillRequestId: 'REQ002' });
 
       await refillTransactionHelper.createRefillTransaction(partialData);
 
@@ -55,7 +55,7 @@ describe('RefillTransaction Helper', () => {
         providerStatus: null              // Initially null
       };
 
-      db.RefillTransaction.create = jest.fn().mockResolvedValue({ id: 125, ...transactionData });
+      db.RefillTransaction.create = jest.fn().mockResolvedValue({ ...transactionData });
 
       const result = await refillTransactionHelper.createRefillTransaction(transactionData);
 
@@ -120,7 +120,6 @@ describe('RefillTransaction Helper', () => {
   describe('getRefillTransactionByRequestId', () => {
     it('should fetch transaction by refillRequestId', async () => {
       const mockTransaction = {
-        id: 123,
         refillRequestId: 'REQ001',
         status: 'COMPLETED'
       };
@@ -156,7 +155,6 @@ describe('RefillTransaction Helper', () => {
   describe('getPendingTransactionByAssetId', () => {
     it('should fetch pending transaction for asset', async () => {
       const mockTransaction = {
-        id: 123,
         refillRequestId: 'REQ001',
         assetId: 1,
         status: 'PENDING'
@@ -180,7 +178,6 @@ describe('RefillTransaction Helper', () => {
 
     it('should fetch processing transaction for asset', async () => {
       const mockTransaction = {
-        id: 124,
         refillRequestId: 'REQ002',
         assetId: 2,
         status: 'PROCESSING'
@@ -216,8 +213,8 @@ describe('RefillTransaction Helper', () => {
   describe('getTransactionsByStatus', () => {
     it('should fetch transactions with specified status', async () => {
       const mockTransactions = [
-        { id: 1, refillRequestId: 'REQ001', status: 'PENDING' },
-        { id: 2, refillRequestId: 'REQ002', status: 'PENDING' }
+        { refillRequestId: 'REQ001', status: 'PENDING' },
+        { refillRequestId: 'REQ002', status: 'PENDING' }
       ];
 
       db.RefillTransaction.findAll = jest.fn().mockResolvedValue(mockTransactions);
@@ -253,7 +250,6 @@ describe('RefillTransaction Helper', () => {
   describe('getLastSuccessfulRefillByAssetId', () => {
     it('should fetch last successful refill for asset', async () => {
       const mockTransaction = {
-        id: 123,
         refillRequestId: 'REQ001',
         assetId: 1,
         status: 'COMPLETED',

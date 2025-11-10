@@ -85,7 +85,7 @@ describe('RefillService', () => {
 
       refillTransactionService.createRefillTransaction.mockResolvedValue({
         success: true,
-        data: { transaction: { id: 123 } }
+        data: { transaction: { refillRequestId: 'REQ001' } }
       });
 
       mockProvider.createTransferRequest.mockResolvedValue({
@@ -192,7 +192,7 @@ describe('RefillService', () => {
 
       refillTransactionService.createRefillTransaction.mockResolvedValue({
         success: true,
-        data: { transaction: { id: 123 } }
+        data: { transaction: { refillRequestId: 'REQ001' } }
       });
 
       mockProvider.createTransferRequest.mockRejectedValue(

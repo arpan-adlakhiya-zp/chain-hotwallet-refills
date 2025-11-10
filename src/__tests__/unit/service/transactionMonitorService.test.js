@@ -86,10 +86,10 @@ describe('TransactionMonitorService', () => {
   describe('getPendingTransactions', () => {
     it('should fetch and combine pending and processing transactions', async () => {
       const pendingTxns = [
-        { id: 1, refillRequestId: 'REQ001', status: 'PENDING', createdAt: '2025-10-31T10:00:00Z' }
+        { refillRequestId: 'REQ001', status: 'PENDING', createdAt: '2025-10-31T10:00:00Z' }
       ];
       const processingTxns = [
-        { id: 2, refillRequestId: 'REQ002', status: 'PROCESSING', createdAt: '2025-10-31T09:00:00Z' }
+        { refillRequestId: 'REQ002', status: 'PROCESSING', createdAt: '2025-10-31T09:00:00Z' }
       ];
 
       databaseService.getTransactionsByStatus
@@ -199,8 +199,8 @@ describe('TransactionMonitorService', () => {
   describe('monitorPendingTransactions', () => {
     it('should monitor all pending transactions', async () => {
       const mockTransactions = [
-        { id: 1, refillRequestId: 'REQ001', status: 'PENDING' },
-        { id: 2, refillRequestId: 'REQ002', status: 'PROCESSING' }
+        { refillRequestId: 'REQ001', status: 'PENDING' },
+        { refillRequestId: 'REQ002', status: 'PROCESSING' }
       ];
 
       databaseService.getTransactionsByStatus
@@ -234,8 +234,8 @@ describe('TransactionMonitorService', () => {
 
     it('should continue monitoring even if one transaction check fails', async () => {
       const mockTransactions = [
-        { id: 1, refillRequestId: 'REQ001', status: 'PENDING' },
-        { id: 2, refillRequestId: 'REQ002', status: 'PROCESSING' }
+        { refillRequestId: 'REQ001', status: 'PENDING' },
+        { refillRequestId: 'REQ002', status: 'PROCESSING' }
       ];
 
       databaseService.getTransactionsByStatus
@@ -254,10 +254,10 @@ describe('TransactionMonitorService', () => {
 
     it('should handle mixed transaction statuses correctly', async () => {
       const mockTransactions = [
-        { id: 1, refillRequestId: 'REQ001', status: 'PENDING' },
-        { id: 2, refillRequestId: 'REQ002', status: 'PROCESSING' },
-        { id: 3, refillRequestId: 'REQ003', status: 'PROCESSING' },
-        { id: 4, refillRequestId: 'REQ004', status: 'PENDING' }
+        { refillRequestId: 'REQ001', status: 'PENDING' },
+        { refillRequestId: 'REQ002', status: 'PROCESSING' },
+        { refillRequestId: 'REQ003', status: 'PROCESSING' },
+        { refillRequestId: 'REQ004', status: 'PENDING' }
       ];
 
       databaseService.getTransactionsByStatus
@@ -278,7 +278,7 @@ describe('TransactionMonitorService', () => {
 
     it('should handle transactions transitioning to COMPLETED', async () => {
       const mockTransactions = [
-        { id: 1, refillRequestId: 'REQ_COMPLETE', status: 'PROCESSING' }
+        { refillRequestId: 'REQ_COMPLETE', status: 'PROCESSING' }
       ];
 
       databaseService.getTransactionsByStatus
@@ -303,7 +303,7 @@ describe('TransactionMonitorService', () => {
 
     it('should handle transactions transitioning to FAILED', async () => {
       const mockTransactions = [
-        { id: 1, refillRequestId: 'REQ_FAIL', status: 'PROCESSING' }
+        { refillRequestId: 'REQ_FAIL', status: 'PROCESSING' }
       ];
 
       databaseService.getTransactionsByStatus
@@ -326,9 +326,9 @@ describe('TransactionMonitorService', () => {
 
     it('should handle Fireblocks intermediate statuses (SUBMITTED, BROADCASTING, etc)', async () => {
       const mockTransactions = [
-        { id: 1, refillRequestId: 'REQ_SUBMIT', status: 'PENDING' },
-        { id: 2, refillRequestId: 'REQ_BROADCAST', status: 'PROCESSING' },
-        { id: 3, refillRequestId: 'REQ_CONFIRM', status: 'PROCESSING' }
+        { refillRequestId: 'REQ_SUBMIT', status: 'PENDING' },
+        { refillRequestId: 'REQ_BROADCAST', status: 'PROCESSING' },
+        { refillRequestId: 'REQ_CONFIRM', status: 'PROCESSING' }
       ];
 
       databaseService.getTransactionsByStatus
@@ -371,11 +371,11 @@ describe('TransactionMonitorService', () => {
 
     it('should handle partial failures in batch processing', async () => {
       const mockTransactions = [
-        { id: 1, refillRequestId: 'REQ_SUCCESS_1', status: 'PENDING' },
-        { id: 2, refillRequestId: 'REQ_FAIL', status: 'PENDING' },
-        { id: 3, refillRequestId: 'REQ_SUCCESS_2', status: 'PROCESSING' },
-        { id: 4, refillRequestId: 'REQ_ERROR', status: 'PROCESSING' },
-        { id: 5, refillRequestId: 'REQ_SUCCESS_3', status: 'PENDING' }
+        { refillRequestId: 'REQ_SUCCESS_1', status: 'PENDING' },
+        { refillRequestId: 'REQ_FAIL', status: 'PENDING' },
+        { refillRequestId: 'REQ_SUCCESS_2', status: 'PROCESSING' },
+        { refillRequestId: 'REQ_ERROR', status: 'PROCESSING' },
+        { refillRequestId: 'REQ_SUCCESS_3', status: 'PENDING' }
       ];
 
       databaseService.getTransactionsByStatus
@@ -403,9 +403,9 @@ describe('TransactionMonitorService', () => {
 
     it('should process transactions in order (oldest first)', async () => {
       const mockTransactions = [
-        { id: 1, refillRequestId: 'REQ_NEW', status: 'PENDING', createdAt: '2025-10-31T12:00:00Z' },
-        { id: 2, refillRequestId: 'REQ_OLD', status: 'PENDING', createdAt: '2025-10-31T10:00:00Z' },
-        { id: 3, refillRequestId: 'REQ_MEDIUM', status: 'PROCESSING', createdAt: '2025-10-31T11:00:00Z' }
+        { refillRequestId: 'REQ_NEW', status: 'PENDING', createdAt: '2025-10-31T12:00:00Z' },
+        { refillRequestId: 'REQ_OLD', status: 'PENDING', createdAt: '2025-10-31T10:00:00Z' },
+        { refillRequestId: 'REQ_MEDIUM', status: 'PROCESSING', createdAt: '2025-10-31T11:00:00Z' }
       ];
 
       databaseService.getTransactionsByStatus
@@ -428,7 +428,7 @@ describe('TransactionMonitorService', () => {
 
     it('should handle empty PENDING and non-empty PROCESSING', async () => {
       const processingOnly = [
-        { id: 1, refillRequestId: 'REQ_PROC', status: 'PROCESSING' }
+        { refillRequestId: 'REQ_PROC', status: 'PROCESSING' }
       ];
 
       databaseService.getTransactionsByStatus
@@ -447,7 +447,7 @@ describe('TransactionMonitorService', () => {
 
     it('should handle non-empty PENDING and empty PROCESSING', async () => {
       const pendingOnly = [
-        { id: 1, refillRequestId: 'REQ_PEND', status: 'PENDING' }
+        { refillRequestId: 'REQ_PEND', status: 'PENDING' }
       ];
 
       databaseService.getTransactionsByStatus
@@ -466,7 +466,7 @@ describe('TransactionMonitorService', () => {
 
     it('should handle status updates with provider_status field', async () => {
       const mockTransactions = [
-        { id: 1, refillRequestId: 'REQ_STATUS', status: 'PENDING', providerStatus: null }
+        { refillRequestId: 'REQ_STATUS', status: 'PENDING', providerStatus: null }
       ];
 
       databaseService.getTransactionsByStatus
@@ -492,7 +492,7 @@ describe('TransactionMonitorService', () => {
     beforeEach(() => {
       config.get.mockImplementation((key) => {
         if (key === 'slackWebhookUrl') return 'https://hooks.slack.com/test';
-        if (key === 'pendingAlertThreshold') return 1800; // 30 minutes
+        if (key === 'pendingAlertThresholdInSeconds') return 1800; // 30 minutes
         return null;
       });
     });
@@ -623,10 +623,10 @@ describe('TransactionMonitorService', () => {
         .resolves.not.toThrow();
     });
 
-    it('should use custom pendingAlertThreshold from config', async () => {
+    it('should use custom pendingAlertThresholdInSeconds from config', async () => {
       config.get.mockImplementation((key) => {
         if (key === 'slackWebhookUrl') return 'https://hooks.slack.com/test';
-        if (key === 'pendingAlertThreshold') return 600; // 10 minutes
+        if (key === 'pendingAlertThresholdInSeconds') return 600; // 10 minutes
         return null;
       });
 

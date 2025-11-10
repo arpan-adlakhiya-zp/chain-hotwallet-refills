@@ -14,7 +14,7 @@ const schema = {
             authPublicKey: {
                 type: 'string'
             },
-            jwtMaxLifetime: {
+            jwtMaxLifetimeInSeconds: {
                 type: 'number',
                 default: 300
             },
@@ -22,11 +22,11 @@ const schema = {
                 type: 'boolean',
                 default: true
             },
-            cronInterval: {
+            cronIntervalInMs: {
                 type: 'number',
                 default: 30000
             },
-            pendingAlertThreshold: {
+            pendingAlertThresholdInSeconds: {
                 type: 'number',
                 default: 1800  // 30 minutes in seconds
             },

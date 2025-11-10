@@ -49,7 +49,7 @@ class RefillTransactionService {
 
       const transaction = await databaseService.createRefillTransaction(transactionData);
 
-      logger.info(`Refill transaction created with ID: ${transaction.id}`);
+      logger.info(`Refill transaction created with request ID: ${transaction.refillRequestId}`);
       
       return {
         success: true,

@@ -113,7 +113,7 @@ function authenticate(req, res, next) {
     logger.info(`Authentication request received for: ${decoded?.refill_request_id}`);
 
     // Get configuration for JWT validation
-    const maxLifetime = config.get('jwtMaxLifetime') || 300; // 5 minutes default
+    const maxLifetime = config.get('jwtMaxLifetimeInSeconds') || 300; // 5 minutes default
     logger.debug(`Configured JWT max lifetime: ${maxLifetime} seconds`);
 
     // Validate JWT lifetime before verification

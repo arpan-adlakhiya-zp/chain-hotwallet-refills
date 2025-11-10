@@ -24,14 +24,12 @@ describe('RefillTransactionService', () => {
 
       databaseService.getRefillTransactionByRequestId.mockResolvedValue(null);
       databaseService.createRefillTransaction.mockResolvedValue({
-        id: 123,
         ...transactionData
       });
 
       const result = await refillTransactionService.createRefillTransaction(transactionData);
 
       expect(result.success).toBe(true);
-      expect(result.data.transaction.id).toBe(123);
       expect(result.data.transaction.refillRequestId).toBe('REQ001');
       expect(databaseService.createRefillTransaction).toHaveBeenCalledWith(transactionData);
     });
@@ -42,7 +40,6 @@ describe('RefillTransactionService', () => {
         provider: 'fireblocks'
       };
       const existingTxn = {
-        id: 123,
         refillRequestId: 'REQ001',
         status: 'COMPLETED',
         amountAtomic: '100000000',
@@ -297,7 +294,6 @@ describe('RefillTransactionService', () => {
   describe('getRefillTransactionByRequestId', () => {
     it('should return transaction when found', async () => {
       const mockTransaction = {
-        id: 123,
         refillRequestId: 'REQ001',
         status: 'COMPLETED'
       };
@@ -334,7 +330,6 @@ describe('RefillTransactionService', () => {
   describe('getTransactionStatusFromDB', () => {
     it('should return transaction status from database', async () => {
       const mockTransaction = {
-        id: 123,
         refillRequestId: 'REQ001',
         status: 'COMPLETED',
         provider: 'fireblocks',

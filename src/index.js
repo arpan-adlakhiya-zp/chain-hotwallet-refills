@@ -47,13 +47,13 @@ const launchServer = async () => {
     if (cronEnabled === true) {
       logger.info('Transaction monitoring cron is ENABLED');
 
-      let cronInterval = 30000;
-      if (config.get('cronInterval')) {
-        cronInterval = parseInt(config.get('cronInterval'));
+      let cronIntervalInMs = 30000;
+      if (config.get('cronIntervalInMs')) {
+        cronIntervalInMs = parseInt(config.get('cronIntervalInMs'));
       }
-      transactionMonitor.start(cronInterval);
+      transactionMonitor.start(cronIntervalInMs);
 
-      logger.info(`Transaction monitor started with interval of ${cronInterval/1000} seconds`);
+      logger.info(`Transaction monitor started with interval of ${cronIntervalInMs/1000} seconds`);
     }
   } catch (error) {
     logger.error('Server startup failure', error.message);
