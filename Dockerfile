@@ -5,6 +5,9 @@ RUN apt-get update && \
     libtool \
     libc6-dev \
     build-essential \
+    autoconf \
+    automake \
+    pkg-config \
     git \
     python3 \
     ca-certificates \
@@ -20,9 +23,10 @@ RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 FROM builder AS dependencies
 ARG NPMRC
 COPY package*.json ./
+ENV npm_config_cache=/root/.npm
 RUN --mount=type=secret,id=ENV_FILE \
     base64 -d /run/secrets/ENV_FILE > /root/.npmrc && \
-    npm install && \
+    npm install --legacy-peer-deps && \
     rm -rf /root/.npmrc
 
 # Stage 3: Final image using the builder as base
