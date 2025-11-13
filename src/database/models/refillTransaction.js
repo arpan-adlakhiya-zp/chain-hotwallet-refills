@@ -61,13 +61,13 @@ module.exports = (sequelize) => {
     // Transaction details
     amountAtomic: {
       field: 'amount_atomic',
-      type: DataTypes.STRING(255),
+      type: DataTypes.DECIMAL(40, 0),
       allowNull: false,
       comment: 'Amount in atomic units'
     },
     amount: {
       field: 'amount',
-      type: DataTypes.STRING(100),
+      type: DataTypes.DECIMAL(38, 18),
       allowNull: true,
       comment: 'Amount in human-readable format (not atomic units)'
     },

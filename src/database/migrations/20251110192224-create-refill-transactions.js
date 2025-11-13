@@ -37,12 +37,12 @@ module.exports = {
         comment: 'Foreign key to assets table - provides complete asset context'
       },
       amount_atomic: {
-        type: Sequelize.STRING(255),
+        type: Sequelize.DECIMAL(40, 0),
         allowNull: false,
         comment: 'Amount in atomic units'
       },
       amount: {
-        type: Sequelize.STRING(100),
+        type: Sequelize.DECIMAL(38, 18),
         allowNull: true,
         comment: 'Amount in human-readable format (not atomic units)'
       },
