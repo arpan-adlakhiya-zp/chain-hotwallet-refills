@@ -1,7 +1,7 @@
 # Testing Guide
 
-[![Test Coverage](https://img.shields.io/badge/coverage-81%25-brightgreen)](coverage)
-[![Tests](https://img.shields.io/badge/tests-381%20passing-brightgreen)](tests)
+[![Test Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)](coverage)
+[![Tests](https://img.shields.io/badge/tests-423%20passing-brightgreen)](tests)
 [![Jest](https://img.shields.io/badge/jest-29.7.0-blue)](package.json)
 
 Comprehensive testing guide for the Chain Hot Wallet Refill service. This document covers test structure, writing guidelines, coverage metrics, and best practices for maintaining test quality.
