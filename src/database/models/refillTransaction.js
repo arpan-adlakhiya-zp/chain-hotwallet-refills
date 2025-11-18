@@ -37,6 +37,12 @@ module.exports = (sequelize) => {
       allowNull: true,
       comment: 'Provider internal transaction ID'
     },
+    externalTxId: {
+      field: 'external_tx_id',
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      comment: 'External transaction ID'
+    },
     
     // Status tracking
     status: {

@@ -83,43 +83,6 @@ describe('TransactionMonitorService', () => {
     });
   });
 
-  describe('getPendingTransactions', () => {
-    it('should fetch and combine pending and processing transactions', async () => {
-      const pendingTxns = [
-        { refillRequestId: 'REQ001', status: 'PENDING', createdAt: '2025-10-31T10:00:00Z' }
-      ];
-      const processingTxns = [
-        { refillRequestId: 'REQ002', status: 'PROCESSING', createdAt: '2025-10-31T09:00:00Z' }
-      ];
-
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce(pendingTxns)
-        .mockResolvedValueOnce(processingTxns);
-
-      const result = await transactionMonitor.getPendingTransactions();
-
-      expect(result).toHaveLength(2);
-      // Should be sorted oldest first
-      expect(result[0].refillRequestId).toBe('REQ002'); // Older
-      expect(result[1].refillRequestId).toBe('REQ001'); // Newer
-    });
-
-    it('should handle empty results', async () => {
-      databaseService.getTransactionsByStatus.mockResolvedValue([]);
-
-      const result = await transactionMonitor.getPendingTransactions();
-
-      expect(result).toEqual([]);
-    });
-
-    it('should handle database errors gracefully', async () => {
-      databaseService.getTransactionsByStatus.mockRejectedValue(new Error('DB error'));
-
-      const result = await transactionMonitor.getPendingTransactions();
-
-      expect(result).toEqual([]);
-    });
-  });
 
   describe('checkAndUpdateTransaction', () => {
     it('should check transaction status and update if changed', async () => {
@@ -203,9 +166,7 @@ describe('TransactionMonitorService', () => {
         { refillRequestId: 'REQ002', status: 'PROCESSING' }
       ];
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce(mockTransactions)
-        .mockResolvedValueOnce([]);
+      databaseService.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
       refillTransactionService.checkAndUpdateTransactionFromProvider.mockResolvedValue({
         success: true,
@@ -214,6 +175,7 @@ describe('TransactionMonitorService', () => {
 
       await transactionMonitor.monitorPendingTransactions();
 
+      expect(databaseService.getTransactionsByStatus).toHaveBeenCalledWith(['PENDING', 'PROCESSING']);
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalledTimes(2);
       // Should pass transaction objects, not just IDs
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalledWith(
@@ -238,9 +200,7 @@ describe('TransactionMonitorService', () => {
         { refillRequestId: 'REQ002', status: 'PROCESSING' }
       ];
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce(mockTransactions)
-        .mockResolvedValueOnce([]);
+      databaseService.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
       refillTransactionService.checkAndUpdateTransactionFromProvider
         .mockRejectedValueOnce(new Error('First failed'))
@@ -254,15 +214,13 @@ describe('TransactionMonitorService', () => {
 
     it('should handle mixed transaction statuses correctly', async () => {
       const mockTransactions = [
-        { refillRequestId: 'REQ001', status: 'PENDING' },
-        { refillRequestId: 'REQ002', status: 'PROCESSING' },
-        { refillRequestId: 'REQ003', status: 'PROCESSING' },
-        { refillRequestId: 'REQ004', status: 'PENDING' }
+        { refillRequestId: 'REQ001', status: 'PENDING', createdAt: '2025-10-31T10:00:00Z' },
+        { refillRequestId: 'REQ002', status: 'PROCESSING', createdAt: '2025-10-31T09:00:00Z' },
+        { refillRequestId: 'REQ003', status: 'PROCESSING', createdAt: '2025-10-31T11:00:00Z' },
+        { refillRequestId: 'REQ004', status: 'PENDING', createdAt: '2025-10-31T08:00:00Z' }
       ];
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce([mockTransactions[0], mockTransactions[3]]) // PENDING
-        .mockResolvedValueOnce([mockTransactions[1], mockTransactions[2]]); // PROCESSING
+      databaseService.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
       // Mock different status responses
       refillTransactionService.checkAndUpdateTransactionFromProvider
@@ -273,6 +231,7 @@ describe('TransactionMonitorService', () => {
 
       await transactionMonitor.monitorPendingTransactions();
 
+      expect(databaseService.getTransactionsByStatus).toHaveBeenCalledWith(['PENDING', 'PROCESSING']);
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalledTimes(4);
     });
 
@@ -281,9 +240,7 @@ describe('TransactionMonitorService', () => {
         { refillRequestId: 'REQ_COMPLETE', status: 'PROCESSING' }
       ];
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce(mockTransactions);
+      databaseService.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
       refillTransactionService.checkAndUpdateTransactionFromProvider.mockResolvedValue({
         success: true,
@@ -296,6 +253,7 @@ describe('TransactionMonitorService', () => {
 
       await transactionMonitor.monitorPendingTransactions();
 
+      expect(databaseService.getTransactionsByStatus).toHaveBeenCalledWith(['PENDING', 'PROCESSING']);
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalledWith(
         expect.objectContaining({ refillRequestId: 'REQ_COMPLETE' })
       );
@@ -306,9 +264,7 @@ describe('TransactionMonitorService', () => {
         { refillRequestId: 'REQ_FAIL', status: 'PROCESSING' }
       ];
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce(mockTransactions);
+      databaseService.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
       refillTransactionService.checkAndUpdateTransactionFromProvider.mockResolvedValue({
         success: true,
@@ -321,6 +277,7 @@ describe('TransactionMonitorService', () => {
 
       await transactionMonitor.monitorPendingTransactions();
 
+      expect(databaseService.getTransactionsByStatus).toHaveBeenCalledWith(['PENDING', 'PROCESSING']);
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalledWith(expect.objectContaining({ refillRequestId: 'REQ_FAIL' }));
     });
 
@@ -331,9 +288,7 @@ describe('TransactionMonitorService', () => {
         { refillRequestId: 'REQ_CONFIRM', status: 'PROCESSING' }
       ];
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce([mockTransactions[0]])
-        .mockResolvedValueOnce([mockTransactions[1], mockTransactions[2]]);
+      databaseService.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
       // Mock Fireblocks intermediate statuses that all map to PROCESSING
       refillTransactionService.checkAndUpdateTransactionFromProvider
@@ -343,6 +298,7 @@ describe('TransactionMonitorService', () => {
 
       await transactionMonitor.monitorPendingTransactions();
 
+      expect(databaseService.getTransactionsByStatus).toHaveBeenCalledWith(['PENDING', 'PROCESSING']);
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalledTimes(3);
     });
 
@@ -354,9 +310,7 @@ describe('TransactionMonitorService', () => {
         status: i % 2 === 0 ? 'PENDING' : 'PROCESSING'
       }));
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce(mockTransactions.filter(t => t.status === 'PENDING'))
-        .mockResolvedValueOnce(mockTransactions.filter(t => t.status === 'PROCESSING'));
+      databaseService.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
       refillTransactionService.checkAndUpdateTransactionFromProvider.mockResolvedValue({
         success: true,
@@ -365,22 +319,21 @@ describe('TransactionMonitorService', () => {
 
       await transactionMonitor.monitorPendingTransactions();
 
+      expect(databaseService.getTransactionsByStatus).toHaveBeenCalledWith(['PENDING', 'PROCESSING']);
       // All 50 should be checked
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalledTimes(50);
     });
 
     it('should handle partial failures in batch processing', async () => {
       const mockTransactions = [
-        { refillRequestId: 'REQ_SUCCESS_1', status: 'PENDING' },
-        { refillRequestId: 'REQ_FAIL', status: 'PENDING' },
-        { refillRequestId: 'REQ_SUCCESS_2', status: 'PROCESSING' },
-        { refillRequestId: 'REQ_ERROR', status: 'PROCESSING' },
-        { refillRequestId: 'REQ_SUCCESS_3', status: 'PENDING' }
+        { refillRequestId: 'REQ_SUCCESS_1', status: 'PENDING', createdAt: '2025-10-31T10:00:00Z' },
+        { refillRequestId: 'REQ_FAIL', status: 'PENDING', createdAt: '2025-10-31T09:00:00Z' },
+        { refillRequestId: 'REQ_SUCCESS_2', status: 'PROCESSING', createdAt: '2025-10-31T11:00:00Z' },
+        { refillRequestId: 'REQ_ERROR', status: 'PROCESSING', createdAt: '2025-10-31T12:00:00Z' },
+        { refillRequestId: 'REQ_SUCCESS_3', status: 'PENDING', createdAt: '2025-10-31T08:00:00Z' }
       ];
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce([mockTransactions[0], mockTransactions[1], mockTransactions[4]])
-        .mockResolvedValueOnce([mockTransactions[2], mockTransactions[3]]);
+      databaseService.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
       // Mix of successes and failures
       refillTransactionService.checkAndUpdateTransactionFromProvider
@@ -392,6 +345,7 @@ describe('TransactionMonitorService', () => {
 
       await transactionMonitor.monitorPendingTransactions();
 
+      expect(databaseService.getTransactionsByStatus).toHaveBeenCalledWith(['PENDING', 'PROCESSING']);
       // All 5 should be attempted
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalledTimes(5);
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalledWith(expect.objectContaining({ refillRequestId: 'REQ_SUCCESS_1' }));
@@ -403,14 +357,12 @@ describe('TransactionMonitorService', () => {
 
     it('should process transactions in order (oldest first)', async () => {
       const mockTransactions = [
-        { refillRequestId: 'REQ_NEW', status: 'PENDING', createdAt: '2025-10-31T12:00:00Z' },
         { refillRequestId: 'REQ_OLD', status: 'PENDING', createdAt: '2025-10-31T10:00:00Z' },
-        { refillRequestId: 'REQ_MEDIUM', status: 'PROCESSING', createdAt: '2025-10-31T11:00:00Z' }
+        { refillRequestId: 'REQ_MEDIUM', status: 'PROCESSING', createdAt: '2025-10-31T11:00:00Z' },
+        { refillRequestId: 'REQ_NEW', status: 'PENDING', createdAt: '2025-10-31T12:00:00Z' }
       ];
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce([mockTransactions[0], mockTransactions[1]])
-        .mockResolvedValueOnce([mockTransactions[2]]);
+      databaseService.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
       refillTransactionService.checkAndUpdateTransactionFromProvider.mockResolvedValue({
         success: true,
@@ -419,6 +371,7 @@ describe('TransactionMonitorService', () => {
 
       await transactionMonitor.monitorPendingTransactions();
 
+      expect(databaseService.getTransactionsByStatus).toHaveBeenCalledWith(['PENDING', 'PROCESSING']);
       // Check order - oldest first (now passing transaction objects)
       const calls = refillTransactionService.checkAndUpdateTransactionFromProvider.mock.calls;
       expect(calls[0][0].refillRequestId).toBe('REQ_OLD');     // 10:00 - oldest
@@ -431,9 +384,7 @@ describe('TransactionMonitorService', () => {
         { refillRequestId: 'REQ_PROC', status: 'PROCESSING' }
       ];
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce([])                  // No PENDING
-        .mockResolvedValueOnce(processingOnly);     // Has PROCESSING
+      databaseService.getTransactionsByStatus.mockResolvedValue(processingOnly);
 
       refillTransactionService.checkAndUpdateTransactionFromProvider.mockResolvedValue({
         success: true,
@@ -442,6 +393,7 @@ describe('TransactionMonitorService', () => {
 
       await transactionMonitor.monitorPendingTransactions();
 
+      expect(databaseService.getTransactionsByStatus).toHaveBeenCalledWith(['PENDING', 'PROCESSING']);
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalledWith(expect.objectContaining({ refillRequestId: 'REQ_PROC' }));
     });
 
@@ -450,9 +402,7 @@ describe('TransactionMonitorService', () => {
         { refillRequestId: 'REQ_PEND', status: 'PENDING' }
       ];
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce(pendingOnly)         // Has PENDING
-        .mockResolvedValueOnce([]);                 // No PROCESSING
+      databaseService.getTransactionsByStatus.mockResolvedValue(pendingOnly);
 
       refillTransactionService.checkAndUpdateTransactionFromProvider.mockResolvedValue({
         success: true,
@@ -461,6 +411,7 @@ describe('TransactionMonitorService', () => {
 
       await transactionMonitor.monitorPendingTransactions();
 
+      expect(databaseService.getTransactionsByStatus).toHaveBeenCalledWith(['PENDING', 'PROCESSING']);
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalledWith(expect.objectContaining({ refillRequestId: 'REQ_PEND' }));
     });
 
@@ -469,9 +420,7 @@ describe('TransactionMonitorService', () => {
         { refillRequestId: 'REQ_STATUS', status: 'PENDING', providerStatus: null }
       ];
 
-      databaseService.getTransactionsByStatus
-        .mockResolvedValueOnce(mockTransactions)
-        .mockResolvedValueOnce([]);
+      databaseService.getTransactionsByStatus.mockResolvedValue(mockTransactions);
 
       // Mock provider returning raw status that gets mapped
       refillTransactionService.checkAndUpdateTransactionFromProvider.mockResolvedValue({
@@ -484,6 +433,7 @@ describe('TransactionMonitorService', () => {
 
       await transactionMonitor.monitorPendingTransactions();
 
+      expect(databaseService.getTransactionsByStatus).toHaveBeenCalledWith(['PENDING', 'PROCESSING']);
       expect(refillTransactionService.checkAndUpdateTransactionFromProvider).toHaveBeenCalled();
     });
   });

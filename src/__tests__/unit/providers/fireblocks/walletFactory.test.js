@@ -107,51 +107,5 @@ describe('Fireblocks WalletFactory', () => {
     });
   });
 
-  describe('validateCredentials', () => {
-    beforeEach(async () => {
-      await walletFactory.init('pk', 'ak', 'url');
-    });
-
-    it('should return success when credentials are valid', async () => {
-      mockFireblocksSDK.getVaultAccounts.mockResolvedValue([
-        { id: '0', name: 'Default' }
-      ]);
-
-      const result = await walletFactory.validateCredentials();
-      
-      expect(result.success).toBe(true);
-      expect(mockFireblocksSDK.getVaultAccounts).toHaveBeenCalled();
-    });
-
-    it('should return success even with empty vault list', async () => {
-      mockFireblocksSDK.getVaultAccounts.mockResolvedValue([]);
-
-      const result = await walletFactory.validateCredentials();
-      
-      expect(result.success).toBe(true);
-    });
-
-    it('should return error when credentials are invalid', async () => {
-      mockFireblocksSDK.getVaultAccounts.mockRejectedValue(
-        new Error('Unauthorized')
-      );
-
-      const result = await walletFactory.validateCredentials();
-      
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Unauthorized');
-    });
-
-    it('should return error on network timeout', async () => {
-      mockFireblocksSDK.getVaultAccounts.mockRejectedValue(
-        new Error('ETIMEDOUT')
-      );
-
-      const result = await walletFactory.validateCredentials();
-      
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('ETIMEDOUT');
-    });
-  });
 });
 

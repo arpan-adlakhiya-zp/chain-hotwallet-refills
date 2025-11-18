@@ -250,36 +250,33 @@ describe('RefillTransactionService', () => {
       expect(result.message).toBeNull();
     });
 
-    it('should extract Liminal transaction details from data property', () => {
+    it('should extract Liminal transaction details from response', () => {
       const liminalResponse = {
-        data: {
-          id: 'lim-456',
-          txid: '0xdef456',
-          status: '4',
-          message: 'Transfer approved'
-        }
+        identifier: 'lim-456',
+        status: '4',
+        comment: 'Transfer approved'
       };
 
       const result = refillTransactionService.extractTransactionDetails('liminal', liminalResponse);
 
       expect(result.providerTxId).toBe('lim-456');
-      expect(result.txHash).toBe('0xdef456');
+      expect(result.txHash).toBe('lim-456');
       expect(result.status).toBe('4');
       expect(result.message).toBe('Transfer approved');
     });
 
-    it('should extract Liminal transaction details from root', () => {
+    it('should extract Liminal transaction details with null comment', () => {
       const liminalResponse = {
-        id: 'lim-789',
-        txHash: '0xghi',
+        identifier: 'lim-789',
         status: 'pending'
       };
 
       const result = refillTransactionService.extractTransactionDetails('liminal', liminalResponse);
 
       expect(result.providerTxId).toBe('lim-789');
-      expect(result.txHash).toBe('0xghi');
+      expect(result.txHash).toBe('lim-789');
       expect(result.status).toBe('pending');
+      expect(result.message).toBeNull();
     });
 
     it('should handle extraction errors gracefully', () => {

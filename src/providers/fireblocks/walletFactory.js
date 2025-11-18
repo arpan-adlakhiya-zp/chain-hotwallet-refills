@@ -39,24 +39,6 @@ class WalletFactory {
       throw error;
     }
   }
-
-  /**
-   * Validate credentials by making a simple API call
-   * @returns {Promise<{success: boolean, error?: string}>}
-   */
-  async validateCredentials() {
-    try {
-      // Try to get vault accounts to validate credentials
-      await this.fireblocks.getVaultAccounts();
-      return { success: true };
-    } catch (error) {
-      logger.error("Error validating credentials:", error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
 }
 
 module.exports = WalletFactory;

@@ -1,11 +1,26 @@
 {
 	"info": {
-		"_postman_id": "c2951c1e-f202-440c-a62d-d0752d9ef55b",
 		"name": "Chain Hotwallet Refills",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "48528896"
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
+    {
+			"name": "Health check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/health",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"health"
+					]
+				}
+			},
+			"response": []
+		},
 		{
 			"name": "Raise a refill request",
 			"event": [
@@ -93,6 +108,45 @@
 						"packages": {},
 						"requests": {}
 					}
+				},
+        {
+					"listen": "test",
+					"script": {
+						"exec": [
+							"const navigator = {}; //fake a navigator object for the lib",
+							"const window = {}; //fake a window object for the lib",
+							"eval(pm.collectionVariables.get('jsrsasign-js'));",
+							"",
+							"const jwt = pm.response.text();",
+							"const publicKey = pm.collectionVariables.get('verifyPublicKey'); // PEM format",
+							"",
+							"let isValid = false;",
+							"try {",
+							"  isValid = KJUR.jws.JWS.verifyJWT(jwt, publicKey, { alg: ['RS256'] });",
+							"} catch (e) {",
+							"  console.log(e.message);",
+							"  pm.test(\"JWT verification error\", function () { pm.expect.fail(e.message); });",
+							"}",
+							"",
+							"pm.test(\"JWT signature is valid (RS256)\", function () {",
+							"  pm.expect(isValid).to.be.true;",
+							"});",
+							"",
+							"const payload = KJUR.jws.JWS.parse(jwt).payloadObj;",
+							"console.log(payload);",
+							"if (payload.exp && payload.iat) {",
+							"  pm.test(\"JWT is not expired\", function () {",
+							"    pm.expect(payload.exp).to.be.above(Math.floor(Date.now() / 1000));",
+							"  });",
+							"  pm.test(\"JWT is within max life time\", function () {",
+							"    pm.expect(payload.exp - payload.iat).to.be.lessThanOrEqual(300);",
+							"  });",
+							"}"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
 				}
 			],
 			"request": {
@@ -162,7 +216,35 @@
 					"listen": "test",
 					"script": {
 						"exec": [
-							""
+							"const navigator = {}; //fake a navigator object for the lib",
+							"const window = {}; //fake a window object for the lib",
+							"eval(pm.collectionVariables.get('jsrsasign-js'));",
+							"",
+							"const jwt = pm.response.text();",
+							"const publicKey = pm.collectionVariables.get('verifyPublicKey'); // PEM format",
+							"",
+							"let isValid = false;",
+							"try {",
+							"  isValid = KJUR.jws.JWS.verifyJWT(jwt, publicKey, { alg: ['RS256'] });",
+							"} catch (e) {",
+							"  console.log(e.message);",
+							"  pm.test(\"JWT verification error\", function () { pm.expect.fail(e.message); });",
+							"}",
+							"",
+							"pm.test(\"JWT signature is valid (RS256)\", function () {",
+							"  pm.expect(isValid).to.be.true;",
+							"});",
+							"",
+							"const payload = KJUR.jws.JWS.parse(jwt).payloadObj;",
+							"console.log(payload);",
+							"if (payload.exp && payload.iat) {",
+							"  pm.test(\"JWT is not expired\", function () {",
+							"    pm.expect(payload.exp).to.be.above(Math.floor(Date.now() / 1000));",
+							"  });",
+							"  pm.test(\"JWT is within max life time\", function () {",
+							"    pm.expect(payload.exp - payload.iat).to.be.lessThanOrEqual(300);",
+							"  });",
+							"}"
 						],
 						"type": "text/javascript",
 						"packages": {},
@@ -291,6 +373,10 @@
 		},
 		{
 			"key": "refill_request_id",
+			"value": ""
+		},
+		{
+			"key": "verifyPublicKey",
 			"value": ""
 		}
 	]

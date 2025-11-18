@@ -60,14 +60,23 @@ function getPendingTransactionByAssetId(assetId) {
 
 /**
  * Get refill transactions by status
- * @param {string} status - Transaction status
- * @param {number} limit - Number of records to return
+ * @param {string} status - Transaction status(es) (array or single status)
  * @returns {Promise<Array>} Array of transactions
  */
 function getTransactionsByStatus(status) {
+  let whereClause;
+  if (Array.isArray(status)) {
+    whereClause = { status: { [db.Sequelize.Op.in]: status } };
+  } else {
+    whereClause = { status: status };
+  }
   return db.RefillTransaction.findAll({
-    where: { status: status },
-    order: [['createdAt', 'ASC']] // Oldest first for monitoring
+    where: whereClause,
+    order: [['createdAt', 'ASC']], // Oldest first for monitoring
+    include: [{
+      model: db.Asset,
+      as: 'Asset'
+    }]
   });
 }
 

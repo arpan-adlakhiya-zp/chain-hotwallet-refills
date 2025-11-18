@@ -125,15 +125,15 @@ class FireblocksProvider extends AbstractProvider {
         note: `Cold to hot wallet refill - ${assetId} transfer`,
       };
 
-      logger.info(`Sending vault-to-vault transfer request to Fireblocks:`, transactionData);
+      logger.info(`Sending transfer request to Fireblocks:`, transactionData);
 
       const result = await this.transaction.createTransaction(transactionData);
       
-      logger.info(`Vault-to-vault transfer request created successfully with Fireblocks`, result);
+      logger.info(`Transfer request created successfully with Fireblocks`, result);
       
       return {
         status: result.status,
-        message: 'Vault-to-vault transfer request submitted to Fireblocks',
+        message: 'Transfer request submitted to Fireblocks',
         externalTxId: txId,
         transactionId: result.id,
         createdAt: new Date().toISOString(),
@@ -143,24 +143,6 @@ class FireblocksProvider extends AbstractProvider {
     } catch (error) {
       logger.error(`Error creating transfer request: ${error.message}`);
       throw error;
-    }
-  }
-
-  async validateCredentials() {
-    try {
-      logger.info('Validating Fireblocks API credentials');
-
-      const result = await this.walletFactory.validateCredentials();
-      return result;
-
-    } catch (error) {
-      logger.error(`Error validating Fireblocks credentials: ${error.message}`);
-      return {
-        success: false,
-        error: 'Failed to validate credentials',
-        code: 'CREDENTIAL_VALIDATION_ERROR',
-        details: error.message
-      };
     }
   }
 }

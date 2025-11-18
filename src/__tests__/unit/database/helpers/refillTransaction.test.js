@@ -223,7 +223,11 @@ describe('RefillTransaction Helper', () => {
 
       expect(db.RefillTransaction.findAll).toHaveBeenCalledWith({
         where: { status: 'PENDING' },
-        order: [['createdAt', 'ASC']]
+        order: [['createdAt', 'ASC']],
+        include: [{
+          model: db.Asset,
+          as: 'Asset'
+        }]
       });
       expect(result).toEqual(mockTransactions);
       expect(result).toHaveLength(2);

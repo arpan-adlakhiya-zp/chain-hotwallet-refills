@@ -66,6 +66,11 @@ module.exports = {
         allowNull: true,
         comment: 'Blockchain transaction hash'
       },
+      external_tx_id: {
+        type: Sequelize.STRING(255),
+        allowNull: true,
+        comment: 'External transaction ID'
+      },
       provider_data: {
         type: Sequelize.JSON,
         allowNull: true,

@@ -26,6 +26,10 @@ const schema = {
         type: 'number',
         default: 30000
       },
+      longPendingRefillAlertEnabled: {
+        type: 'boolean',
+        default: true
+      },
       pendingAlertThresholdInSeconds: {
         type: 'number',
         default: 1800  // 30 minutes in seconds
@@ -65,7 +69,7 @@ const schema = {
         required: ['liminal', 'fireblocks']
       }
     },
-    required: ['serverPort', 'logConfig', 'providers', 'authEnabled', 'cronEnabled']
+    required: ['serverPort', 'logConfig', 'providers', 'authEnabled', 'cronEnabled', 'longPendingRefillAlertEnabled']
   },
   secret: {
     type: 'object',

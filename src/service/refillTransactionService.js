@@ -246,6 +246,7 @@ class RefillTransactionService {
           providerStatus: transaction.providerStatus,
           provider: transaction.provider,
           providerTxId: transaction.providerTxId,
+          externalTxId: transaction.externalTxId,
           txHash: transaction.txHash,
           message: transaction.message,
           createdAt: transaction.createdAt,
@@ -276,8 +277,7 @@ class RefillTransactionService {
       const providerName = transaction.provider;
       const currentStatus = transaction.status;
       const providerTxId = transaction.providerTxId;
-
-      logger.info(`Fetching latest status from provider for ${refillRequestId}: ${providerName} - ${providerTxId}`);
+      const externalTxId = transaction.externalTxId;
 
       // Get providers from provider service
       await providerService.initialize();
@@ -298,18 +298,17 @@ class RefillTransactionService {
         };
       }
 
+      logger.info(`Fetching latest status from ${providerName} for ${refillRequestId} with txn ID ${providerTxId} and external txn ID ${externalTxId}`);
+
       // Fetch latest status from provider
       let providerStatusResponse = null;
       try {
-        logger.info(`Fetching latest status from provider ${providerName} for transaction: ${providerTxId}`);
-
         // Fetch status from provider based on provider type
         if (providerName.toLowerCase() === 'fireblocks') {
           providerStatusResponse = await provider.getTransactionById(providerTxId);
         } else if (providerName.toLowerCase() === 'liminal') {
           // Get asset info from transaction association (already loaded with transaction)
           const asset = transaction.Asset;
-          
           if (!asset) {
             logger.error(`Asset not found in transaction association for transaction: ${refillRequestId}`);
             return {
@@ -326,9 +325,9 @@ class RefillTransactionService {
             blockchainSymbol: asset.Blockchain?.symbol || transaction.tokenSymbol,
             contractAddress: asset.contractAddress === 'native' ? null : asset.contractAddress,
             decimalPlaces: asset.decimals,
-            walletConfig: asset.hotWalletConfig || {}
+            walletConfig: asset.sweepWalletConfig || {}
           };
-          providerStatusResponse = await provider.getTransferStatus(providerTxId, tokenInfo);
+          providerStatusResponse = await provider.getTransactionById(providerTxId, externalTxId, tokenInfo);
         } else {
           logger.error(`Unknown provider type: ${providerName}`);
           return {
@@ -356,6 +355,7 @@ class RefillTransactionService {
             status: currentStatus,
             provider: providerName,
             providerTxId: providerTxId,
+            externalTxId: externalTxId,
             txHash: transaction.txHash,
             message: `Failed to fetch latest status from provider: ${error.message}`
           }
@@ -394,6 +394,7 @@ class RefillTransactionService {
             providerTxId: providerTxId,
             providerStatus: updateData.providerStatus || transaction.providerStatus,
             txHash: updateData.txHash || transaction.txHash,
+            externalTxId: externalTxId,
             message: updateData.message || transaction.message,
             previousStatus: currentStatus,
             updated: true
@@ -412,6 +413,7 @@ class RefillTransactionService {
             providerTxId: providerTxId,
             providerStatus: transaction.providerStatus,
             txHash: transaction.txHash,
+            externalTxId: externalTxId,
             message: transaction.message,
             updated: false
           }
@@ -447,14 +449,12 @@ class RefillTransactionService {
           providerData: providerResponse
         };
       } else if (provider === 'liminal') {
-        // Liminal response can be in different formats
-        const responseData = providerResponse.data || providerResponse;
         return {
-          providerTxId: responseData.id?.toString() || responseData.txid || null,
-          txHash: responseData.txid || responseData.txHash || null,
-          status: responseData.status || responseData.type || 'pending',
-          message: responseData.note || responseData.message || null,
-          providerData: responseData
+          providerTxId: providerResponse.identifier,
+          txHash: providerResponse.identifier,
+          status: providerResponse.status,
+          message: providerResponse.comment || null,
+          providerData: providerResponse
         };
       }
       

@@ -33,6 +33,15 @@ class AbstractProvider {
   }
 
   /**
+   * Get transaction by ID
+   * @param {string} txnId - Transaction ID
+   * @returns {Promise<Object>} Transaction object
+   */
+  async getTransactionById(txnId) {
+    throw new Error('getTransactionById() method must be implemented by provider');
+  }
+
+  /**
    * Get token balance for a wallet
    * @param {Object} token - Token configuration object
    * @returns {Promise<string>} Balance in atomic units
@@ -51,44 +60,11 @@ class AbstractProvider {
   }
 
   /**
-   * Validate provider credentials and configuration
-   * @returns {Promise<{success: boolean, error?: string, code?: string}>}
-   */
-  async validateCredentials() {
-    throw new Error('validateCredentials() method must be implemented by provider');
-  }
-
-
-  /**
    * Get provider name
    * @returns {string} Provider name
    */
   static getProviderName() {
     throw new Error('getProviderName() method must be implemented by provider');
-  }
-
-
-  /**
-   * Get provider health status
-   * @returns {Promise<{success: boolean, status?: string, error?: string, code?: string}>}
-   */
-  async getHealthStatus() {
-    try {
-      const validation = await this.validateCredentials();
-      return {
-        success: validation.success,
-        status: validation.success ? 'healthy' : 'unhealthy',
-        error: validation.error,
-        code: validation.code
-      };
-    } catch (error) {
-      return {
-        success: false,
-        status: 'unhealthy',
-        error: error.message,
-        code: 'HEALTH_CHECK_ERROR'
-      };
-    }
   }
 }
 

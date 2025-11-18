@@ -22,6 +22,7 @@
   "cronEnabled": true,
   "cronIntervalInMs": 60000, // default: 60 seconds
   "jwtMaxLifetimeInSeconds": 300, // default: 5 minutes
+  "longPendingRefillAlertEnabled": false, // If set to true, alerts will be raised for long pending transactions
   "slackWebhookUrl": "<slack_webhook_url>",
   "pendingAlertThresholdInSeconds": 1800 // default: 30 minutes
 }

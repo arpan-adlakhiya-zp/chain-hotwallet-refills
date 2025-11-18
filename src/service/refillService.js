@@ -63,30 +63,7 @@ class RefillService {
 
       logger.debug(`Refill data: ${JSON.stringify(refillData, null, 2)}`);
 
-      // // Get the provider for this token
-      // const provider = await providerService.getTokenProvider(
-      //   refillData.chain_name,
-      //   refillData.asset_symbol
-      // );
-
-      // if (!provider) {
-      //   logger.error(`No provider available for blockchain ${refillData.chain_name} and asset ${refillData.asset_symbol}`);
-      //   return {
-      //     success: false,
-      //     error: 'No provider available for this blockchain and asset combination',
-      //     code: 'NO_PROVIDER_AVAILABLE',
-      //     data: {
-      //       chainName: refillData.chain_name,
-      //       assetSymbol: refillData.asset_symbol,
-      //       availableProviders: Array.from(this.providers.keys())
-      //     }
-      //   };
-      // }
-
-      // const providerName = provider.constructor.getProviderName();
-
       // Validate the refill request
-      // refillData.provider = provider; // Pass provider to validation
       const validationResult = await refillValidationService.validateRefillRequest(refillData);
       if (!validationResult.success) {
         logger.error(`Refill request validation failed: ${validationResult.error}, result: ${JSON.stringify(validationResult, null, 2)}`);
@@ -157,7 +134,8 @@ class RefillService {
       await refillTransactionService.updateRefillTransaction(refillRequestId, {
         status: txnStatus,
         providerTxId: transactionResult.data.transferId,
-        providerStatus: transactionResult.data.status
+        providerStatus: transactionResult.data.status,
+        externalTxId: transactionResult.data.externalTxId
       });
 
       logger.info(`Refill request initiated successfully. Transaction ID: ${transactionResult.data.transferId}, Provider: ${providerName}`);
@@ -234,6 +212,7 @@ class RefillService {
         data: {
           refillRequestId: refillRequestId,
           transferId: transferRequest.id || transferRequest.transferId || transferRequest.transactionId,
+          externalTxId: transferRequest.externalTxId,
           status: transferRequest.status,
           message: transferRequest.message || 'Transfer request created successfully',
           transferRequest: transferRequest

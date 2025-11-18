@@ -22,7 +22,6 @@ describe('FireblocksProvider', () => {
     mockWalletFactory = {
       init: jest.fn().mockResolvedValue(true),
       getTokenBalance: jest.fn(),
-      validateCredentials: jest.fn(),
       fireblocks: mockFireblocksSDK
     };
 
@@ -229,7 +228,7 @@ describe('FireblocksProvider', () => {
       expect(result.status).toBe('SUBMITTED');
       expect(result.externalTxId).toBe('refill-001_BTC');
       expect(result.transactionId).toBeDefined(); // Transaction ID should exist
-      expect(result.message).toContain('Vault-to-vault transfer');
+      expect(result.message).toContain('Transfer request submitted to Fireblocks');
     });
 
     it('should default assetId to asset symbol when not provided', async () => {
@@ -305,45 +304,5 @@ describe('FireblocksProvider', () => {
     });
   });
 
-  describe('validateCredentials', () => {
-    beforeEach(async () => {
-      await provider.init();
-    });
-
-    it('should validate credentials successfully', async () => {
-      mockWalletFactory.validateCredentials.mockResolvedValue({
-        success: true
-      });
-
-      const result = await provider.validateCredentials();
-
-      expect(result.success).toBe(true);
-      expect(mockWalletFactory.validateCredentials).toHaveBeenCalled();
-    });
-
-    it('should return error when credentials invalid', async () => {
-      mockWalletFactory.validateCredentials.mockResolvedValue({
-        success: false,
-        error: 'Invalid credentials'
-      });
-
-      const result = await provider.validateCredentials();
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Invalid credentials');
-    });
-
-    it('should handle validation errors', async () => {
-      mockWalletFactory.validateCredentials.mockRejectedValue(
-        new Error('Network error')
-      );
-
-      const result = await provider.validateCredentials();
-
-      expect(result.success).toBe(false);
-      expect(result.code).toBe('CREDENTIAL_VALIDATION_ERROR');
-      expect(result.details).toContain('Network error');
-    });
-  });
 });
 

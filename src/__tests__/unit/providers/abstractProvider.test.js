@@ -67,60 +67,11 @@ describe('AbstractProvider', () => {
     });
   });
 
-  describe('validateCredentials', () => {
-    it('should throw error if not implemented by child class', async () => {
-      await expect(provider.validateCredentials()).rejects.toThrow(
-        'validateCredentials() method must be implemented by provider'
-      );
-    });
-  });
-
   describe('getProviderName', () => {
     it('should throw error if not implemented by child class', () => {
       expect(() => AbstractProvider.getProviderName()).toThrow(
         'getProviderName() method must be implemented by provider'
       );
-    });
-  });
-
-  describe('getHealthStatus', () => {
-    it('should return healthy when validateCredentials succeeds', async () => {
-      provider.validateCredentials = jest.fn().mockResolvedValue({
-        success: true
-      });
-
-      const result = await provider.getHealthStatus();
-
-      expect(result.success).toBe(true);
-      expect(result.status).toBe('healthy');
-    });
-
-    it('should return unhealthy when validateCredentials fails', async () => {
-      provider.validateCredentials = jest.fn().mockResolvedValue({
-        success: false,
-        error: 'Invalid credentials',
-        code: 'AUTH_ERROR'
-      });
-
-      const result = await provider.getHealthStatus();
-
-      expect(result.success).toBe(false);
-      expect(result.status).toBe('unhealthy');
-      expect(result.error).toBe('Invalid credentials');
-      expect(result.code).toBe('AUTH_ERROR');
-    });
-
-    it('should handle exceptions during validation', async () => {
-      provider.validateCredentials = jest.fn().mockRejectedValue(
-        new Error('Network timeout')
-      );
-
-      const result = await provider.getHealthStatus();
-
-      expect(result.success).toBe(false);
-      expect(result.status).toBe('unhealthy');
-      expect(result.error).toContain('Network timeout');
-      expect(result.code).toBe('HEALTH_CHECK_ERROR');
     });
   });
 });

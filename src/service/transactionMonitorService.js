@@ -2,6 +2,7 @@ const logger = require('../middleware/logger')('transactionMonitor');
 const refillTransactionService = require('./refillTransactionService');
 const config = require('../config');
 const { sendSlackAlert } = require('../utils/slackAlerts');
+const databaseService = require('./chainDb');
 
 /**
  * Transaction Monitor Service
@@ -55,7 +56,7 @@ class TransactionMonitorService {
       logger.debug('Starting transaction status check cycle');
 
       // Get all non-final transactions from database
-      const pendingTxns = await this.getPendingTransactions();
+      const pendingTxns = await databaseService.getTransactionsByStatus(['PENDING', 'PROCESSING']);
 
       if (!pendingTxns || pendingTxns.length === 0) {
         logger.debug('No pending transactions to monitor');
@@ -69,47 +70,20 @@ class TransactionMonitorService {
         pendingTxns.map(tx => this.checkAndUpdateTransaction(tx))
       );
 
-      console.log('results', JSON.stringify(results, null, 2));
       // Log summary
       const successful = results.filter(r => r.status === 'fulfilled').length;
       const failed = results.filter(r => r.status === 'rejected').length;
       
       logger.info(`Monitor cycle complete: ${successful} checked, ${failed} errors`);
 
-      // Check for long-pending transactions and raise alerts
-      await this.checkAndAlertLongPending(pendingTxns, results);
+      // Check for long-pending transactions and raise alerts if enabled
+      const longPendingRefillAlertEnabled = config.get('longPendingRefillAlertEnabled');
+      if (longPendingRefillAlertEnabled) {
+        await this.checkAndAlertLongPending(pendingTxns, results);
+      }
 
     } catch (error) {
       logger.error(`Error in monitor cycle: ${error.message}`);
-    }
-  }
-
-  /**
-   * Get pending and processing transactions from database
-   * @returns {Promise<Array>} List of transactions
-   */
-  async getPendingTransactions() {
-    try {
-      // Query database for non-final transactions
-      const databaseService = require('./chainDb');
-      
-      // Get PENDING transactions
-      const pending = await databaseService.getTransactionsByStatus('PENDING');
-      
-      // Get PROCESSING transactions
-      const processing = await databaseService.getTransactionsByStatus('PROCESSING');
-      
-      // Combine and deduplicate
-      const allPending = [...(pending || []), ...(processing || [])];
-      
-      // Sort by creation date (oldest first - higher priority)
-      return allPending.sort((a, b) => 
-        new Date(a.createdAt) - new Date(b.createdAt)
-      );
-      
-    } catch (error) {
-      logger.error(`Error fetching pending transactions: ${error.message}`);
-      return [];
     }
   }
 
@@ -158,7 +132,7 @@ class TransactionMonitorService {
       
       // Skip if Slack webhook URL is not configured
       if (!slackWebhookUrl) {
-        logger.debug('Slack webhook URL not configured, skipping alert');
+        logger.error('Slack webhook URL not configured');
         return;
       }
 
@@ -201,7 +175,6 @@ class TransactionMonitorService {
         logger.debug('Long-pending refill transactions', longPendingTxns);
         
         const alertMessage = this.formatPendingAlert(longPendingTxns, pendingAlertThresholdInSeconds);
-        console.log('alertMessage', alertMessage);
         
         // Raise Slack alert
         await sendSlackAlert(alertMessage);

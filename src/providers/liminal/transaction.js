@@ -1,181 +1,154 @@
 const logger = require('../../middleware/logger')('liminalTransaction');
-const config = require('../../config');
 
 /**
  * Liminal Transaction class for handling transaction operations
  * Based on hot wallet infra pattern
  */
 class Transaction {
-  constructor(wallet) {
-    this.wallet = wallet;
+  constructor(walletFactory) {
+    this.walletFactory = walletFactory;
   }
 
   /**
-   * Create a transaction using Liminal SDK PreBuildTransactionSatoshi
-   * @param {Array} txns - Array of transaction objects
-   * @param {Object} token - Token configuration object
-   * @returns {Promise<Object>} Transaction result
+   * Create a transfer request from cold wallet to hot wallet
+   * using CreateSendManyTransactionRequestAsync
+   * @param {Object} transferData - Transfer configuration
+   * @returns {Promise<Object>} Transfer request result
    */
-  async createTransaction(txns, token) {
+  async createTransferRequest(transferData) {
     try {
-      // Prepare recipients data for PreBuildTransactionSatoshi
-      const recipients = txns.map((txn) => ({
-        address: txn.sendAddress,
-        amount: txn.amount
-      }));
-
-      const transactionParams = {
-        recipients: recipients,
-        isInternal: true // For cold to hot wallet transactions, this is internal
-      };
-
-      logger.debug({ createTransaction: transactionParams });
+      const { coldWalletId, hotWalletAddress, amount, asset, blockchain, externalTxId, coldWalletConfig } = transferData;
       
-      // Use Liminal SDK PreBuildTransactionSatoshi method
-      const result = await this.wallet.PreBuildTransactionSatoshi(transactionParams);
-      
-      logger.debug({ createdTransaction: result });
+      logger.debug(`Creating transfer request: ${amount} ${asset} from cold wallet ${coldWalletId} to ${hotWalletAddress}`);
 
-      return { 
-        rawTx: result, 
-        serializedTx: JSON.stringify(result),
-        txId: result.txDataResponse?.txID || result.txJson?.txID || `tx_${Date.now()}`
-      };
+      let symbol = null;
+      if (coldWalletConfig && coldWalletConfig.liminal && coldWalletConfig.liminal.tokenSymbol) {
+        symbol = coldWalletConfig.liminal.tokenSymbol;
+      } else {
+        logger.info(`Missing token symbol for asset ${asset} on blockchain ${blockchain} for Liminal, continuing with default asset symbol`);
+        // Keep default asset symbol
+        symbol = asset;
+      }
+      
+      const wallet = await this.walletFactory.getWallet({
+        symbol: symbol,
+        blockchainSymbol: blockchain,
+        contractAddress: transferData.contractAddress || null,
+        walletConfig: coldWalletConfig
+      });
+      
+      if (!wallet) {
+        throw new Error("Unable to get cold wallet instance");
+      }
+      
+      // Use provided externalTxId or generate one if not provided
+      const sequenceId = `${externalTxId}_${symbol}`;
+
+      try {
+        // Get WalletV2 instance
+        const walletV2 = wallet.WalletV2();
+        
+        if (!walletV2) {
+          throw new Error("Unable to get WalletV2 instance");
+        }
+
+        // Prepare the SendMany request options as per WalletV2 API
+        const sendManyOptions = {
+          recipients: [{
+            address: hotWalletAddress,
+            amount: amount
+          }],
+          sequenceId: sequenceId,
+          isInternal: true,
+          comment: `Cold to hot wallet refill: ${amount} ${asset}`
+        };
+
+        logger.info("Sending transfer request to Liminal:", sendManyOptions);
+
+        // Use CreateSendManyTransactionRequestAsync method
+        const result = await walletV2.CreateSendManyTransactionRequestAsync({
+          sendManyOptions: sendManyOptions
+        });
+        if (result.isErr()) {
+          const error = result.error;
+          const errorMessage = error.message || 'CreateSendManyTransactionRequestAsync failed';
+          logger.error(`CreateSendManyTransactionRequestAsync error: ${errorMessage}`, error);
+          throw new Error(errorMessage);
+        }
+        
+        // Extract response from Result value
+        const response = result.value;
+        if (!response.success) {
+          throw new Error(response.message || 'CreateSendManyTransactionRequestAsync failed');
+        }
+        
+        logger.info("Transfer request created successfully with Liminal:", response);
+        
+        // Extract transaction ID from response data
+        const transactionId = response.data?.txnReqId?.toString();
+        
+        // Return the transfer result
+        return {
+          status: response.data?.status || null,
+          message: response.data?.comment || sendManyOptions.comment,
+          externalTxId: response.data?.sequenceId || sequenceId,
+          transactionId: transactionId,
+          createdAt: response.data?.timestamp ? new Date(response.data?.timestamp).toISOString() : new Date().toISOString(),
+          result: response.data
+        }; 
+      } catch (sdkError) {
+        logger.error("Error in CreateSendManyTransactionRequestAsync transfer process:", sdkError);
+        throw new Error(`Failed to create transfer request: ${sdkError.message}`);
+      }
     } catch (error) {
-      logger.error("Error creating transaction:", error);
+      logger.error("Error creating transfer request:", error);
       throw error;
     }
   }
 
   /**
-   * Sign a transaction using Liminal SDK SignTransaction
-   * @param {Array} tx - Array of transaction objects with address, amount, dbId
-   * @param {Object} unsignedTx - The unsigned transaction from createTransaction
-   * @returns {Promise<Object>} Signed transaction result
+   * Get transaction by ID
+   * @param {string} txnId - Transaction ID
+   * @param {string} sequenceId - Sequence ID
+   * @param {Object} token - Token configuration object (required for Liminal to get wallet instance)
+   * @returns {Promise<Object>} Transaction details
    */
-  async signTransaction(tx, unsignedTx) {
+  async getTransactionById(txnId, sequenceId, token) {
     try {
-      let recipients = [];
-      for (let i = 0; i < tx.length; i++) {
-        if ("data" in tx[i]) {
-          recipients.push({
-            address: tx[i].address,
-            amount: tx[i].amount,
-            data: tx[i].data,
-          });
+      if (!token) {
+        throw new Error("Token configuration is required to get transaction by ID");
+      }
+
+      logger.info(`Getting transaction by ID: ${txnId} and sequenceId: ${sequenceId} for token: ${token.symbol}`);
+
+      // Get wallet instance
+      const wallet = await this.walletFactory.getWallet(token);
+      if (!wallet) {
+        throw new Error("Unable to get wallet instance");
+      }
+
+      let transferResult = null;
+      if (sequenceId) {
+        logger.debug(`Fetching pending transaction with sequenceId: ${sequenceId}`);
+        transferResult = await wallet.GetPendingTransaction({ sequenceId: sequenceId });
+      } 
+      if (!transferResult.success) {
+        if (txnId && transferResult.message && transferResult.message.toLowerCase().includes("pending transaction is not found")) {
+          logger.info(`Fetching transaction with txId: ${txnId}`);
+          transferResult = await wallet.GetTransfer({ txId: txnId, sequenceId: sequenceId });
+          if (!transferResult.success) {
+            throw new Error(`error: ${transferResult}`);
+          }
         } else {
-          recipients.push({ address: tx[i].address, amount: tx[i].amount });
+          throw new Error(`error: ${transferResult}`);
         }
       }
 
-      let params = {
-        recipients: recipients,
-        isInternal: true // For cold to hot wallet transactions, this is internal
-      };
+      logger.debug(`Transaction found:`, transferResult);
 
-      // Add TSM credentials if available
-      const tsmCreds = config.getSecret("liminalTsmCredentials");
-      if (tsmCreds && tsmCreds.userID && tsmCreds.userID.length > 1) {
-        params.tsmCreds = tsmCreds;
-        logger.debug('TSM credentials added to signing parameters');
-      } else {
-        logger.debug('TSM credentials not found - signing may fail');
-      }
-
-      logger.debug({ signTransaction: params });
-      
-      // Use Liminal SDK SignTransaction method
-      const signedTx = await this.wallet.SignTransaction(params, unsignedTx);
-      
-      logger.debug({ signedTransaction: signedTx });
-      
-      return signedTx;
+      return transferResult.data.transaction;
     } catch (error) {
-      logger.error("Error signing transaction:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Send/Submit a signed transaction using Liminal SDK Submit
-   * @param {Object} halfSignedTx - The signed transaction from signTransaction
-   * @param {string} batchId - Optional batch ID for the transaction
-   * @returns {Promise<Object>} Submission result
-   */
-  async sendTransaction(halfSignedTx, batchId = null) {
-    try {
-      logger.debug({ sendTransaction: { batchId } });
-      
-      // Use Liminal SDK Submit method
-      const sentTransaction = await this.wallet.Submit(halfSignedTx, batchId);
-      
-      logger.debug({ submittedTransaction: sentTransaction });
-      
-      return sentTransaction;
-    } catch (error) {
-      logger.error("Error sending transaction:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get transaction status using Liminal SDK
-   * @param {string} batchId - The batch ID of the transaction
-   * @returns {Promise<Object>} Transaction status
-   */
-  async getTransactionStatus(batchId) {
-    try {
-      logger.debug({ getTransactionStatus: { batchId } });
-      
-      // Use Liminal SDK to get transaction status
-      const status = await this.wallet.GetTransactionStatus(batchId);
-      
-      logger.debug({ transactionStatus: status });
-      
-      return {
-        status: status.status,
-        sequenceId: batchId,
-        details: status
-      };
-    } catch (error) {
-      logger.error("Error getting transaction status:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Complete transaction flow: create, sign, and submit
-   * @param {Array} txns - Array of transaction objects
-   * @param {Object} token - Token configuration object
-   * @param {string} batchId - Optional batch ID
-   * @returns {Promise<Object>} Complete transaction result
-   */
-  async createSignAndSubmit(txns, token, batchId = null) {
-    try {
-      logger.info(`Starting complete transaction flow for ${txns.length} transactions`);
-      
-      // Step 1: Create transaction
-      const createResult = await this.createTransaction(txns, token);
-      logger.info("Transaction created successfully");
-      
-      // Step 2: Sign transaction
-      const signResult = await this.signTransaction(txns, createResult.rawTx);
-      logger.info("Transaction signed successfully");
-      
-      // Step 3: Submit transaction
-      const submitResult = await this.sendTransaction(signResult, batchId);
-      logger.info("Transaction submitted successfully");
-      
-      return {
-        success: true,
-        createResult,
-        signResult,
-        submitResult,
-        transactionId: createResult.txId,
-        batchId: batchId || submitResult.batchId
-      };
-    } catch (error) {
-      logger.error("Error in complete transaction flow:", error);
+      logger.error("Error getting transaction:", error);
       throw error;
     }
   }
