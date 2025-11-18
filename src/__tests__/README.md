@@ -111,12 +111,12 @@ open coverage/lcov-report/index.html
 
 ### Current Metrics
 
-The project maintains **81% code coverage** across all metrics:
+The project maintains **95% code coverage** across all metrics:
 
-- **Statements**: 81.01%
-- **Branches**: 77.11%
-- **Functions**: 80.98%
-- **Lines**: 81.08%
+- **Statements**: 95.91%
+- **Branches**: 88.97%
+- **Functions**: 96.89%
+- **Lines**: 95.9%
 
 ### Coverage Exclusions
 
