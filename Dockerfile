@@ -2,14 +2,6 @@ FROM nikolaik/python-nodejs:python3.12-nodejs18 AS builder
 WORKDIR /opt/chain-hotwallet-refills
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    libtool \
-    libc6-dev \
-    build-essential \
-    autoconf \
-    automake \
-    pkg-config \
-    git \
-    python3 \
     ca-certificates \
     curl && \
     curl -fsSLo /usr/local/share/ca-certificates/rds-global-bundle.pem \

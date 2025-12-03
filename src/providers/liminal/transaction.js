@@ -127,28 +127,11 @@ class Transaction {
         throw new Error("Unable to get wallet instance");
       }
 
-      let transferResult = null;
-      if (sequenceId) {
-        logger.debug(`Fetching pending transaction with sequenceId: ${sequenceId}`);
-        transferResult = await wallet.GetPendingTransaction({ sequenceId: sequenceId });
-      } 
-      if (!transferResult.success) {
-        if (txnId && transferResult.message && transferResult.message.toLowerCase().includes("pending transaction is not found")) {
-          logger.info(`Fetching transaction with txId: ${txnId}`);
-          transferResult = await wallet.GetTransfer({ txId: txnId, sequenceId: sequenceId });
-          if (!transferResult.success) {
-            throw new Error(`error: ${transferResult}`);
-          }
-        } else {
-          throw new Error(`error: ${transferResult}`);
-        }
-      }
+      const transferResult = await wallet.TransferStatus({ sequenceId: sequenceId });
 
-      logger.debug(`Transaction found:`, transferResult);
-
-      return transferResult.data.transaction;
+      return transferResult;
     } catch (error) {
-      logger.error("Error getting transaction:", error);
+      logger.error(`Error getting transaction: ${error.message}`);
       throw error;
     }
   }

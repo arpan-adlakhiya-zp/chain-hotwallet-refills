@@ -170,11 +170,17 @@ class RefillUtils {
     }
 
     // Check if raw provider status changed
-    if (providerDetails.status && providerDetails.status !== dbTransaction.providerStatus) {
-      updateData.providerStatus = providerDetails.status;
+    if (providerDetails.status && providerDetails.status.toString() !== dbTransaction.providerStatus.toString()) {
+      updateData.providerStatus = providerDetails.status.toString();
       updateData.providerData = providerDetails.providerData; // Include full response
       hasChanges = true;
       logger.info(`Provider status updated: ${dbTransaction.providerStatus} → ${providerDetails.status}`);
+    }
+
+    if (dbTransaction.provider === 'liminal' && providerDetails.providerTxId && providerDetails.providerTxId !== dbTransaction.providerTxId) {
+      updateData.providerTxId = providerDetails.providerTxId;
+      hasChanges = true;
+      logger.info(`Provider TxId updated for liminal txn: ${dbTransaction.providerTxId} → ${providerDetails.providerTxId}`);
     }
 
     // Check if txHash added
